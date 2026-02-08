@@ -18,7 +18,7 @@ import (
 
 var (
 	// Build-time embedded via ldflags
-	SupabaseURL = "https://hlbilthxcozyqolbkkok.supabase.co"
+	SupabaseURL = ""
 	SupabaseKey = ""
 )
 
