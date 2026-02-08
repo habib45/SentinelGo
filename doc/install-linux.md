@@ -22,7 +22,17 @@ sudo cp sentinelgo-linux-amd64 /opt/sentinelgo/sentinelgo
 sudo chmod +x /opt/sentinelgo/sentinelgo
 ```
 
-## 4. (Optional) Create a Configuration File
+## 4. Set Environment Variables
+Create a `.env` file with your Supabase credentials:
+```bash
+sudo tee /opt/sentinelgo/.env > /dev/null <<'EOF'
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-anon-key
+EOF
+sudo chmod 600 /opt/sentinelgo/.env
+```
+
+## 5. (Optional) Create a Configuration File
 You can override defaults like heartbeat interval. Only include GitHub fields if you use a different repo:
 ```bash
 sudo mkdir -p /etc/sentinelgo
@@ -42,7 +52,7 @@ If you use a custom GitHub repo, also set:
 }
 ```
 
-## 5. Create a systemd Service
+## 6. Create a systemd Service
 ```bash
 sudo tee /etc/systemd/system/sentinelgo.service > /dev/null <<'EOF'
 [Unit]
@@ -62,20 +72,20 @@ WantedBy=multi-user.target
 EOF
 ```
 
-## 6. Enable and Start the Service
+## 7. Enable and Start the Service
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable sentinelgo
 sudo systemctl start sentinelgo
 ```
 
-## 7. Verify
+## 8. Verify
 ```bash
 sudo systemctl status sentinelgo
 ```
 Should show `active (running)`.
 
-## 8. Uninstall (if needed)
+## 9. Uninstall (if needed)
 ```bash
 sudo systemctl stop sentinelgo
 sudo systemctl disable sentinelgo
@@ -91,7 +101,7 @@ sudo journalctl -u sentinelgo -f
 ```
 
 ## Notes
-- Supabase connection is embedded at build time; users do not configure it.
+- Supabase connection is configured via environment variables in `/opt/sentinelgo/.env`.
 - The agent checks for updates once every 24 hours from GitHub Releases.
 - Heartbeat is sent every 5 minutes (configurable).
 - Runs as root to collect full system metrics. If you prefer non-root, change `User`/`Group` in the service file and adjust permissions.

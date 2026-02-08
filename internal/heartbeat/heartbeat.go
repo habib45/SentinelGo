@@ -5,11 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"sentinelgo/internal/config"
 	"sentinelgo/internal/osinfo"
+
+	"github.com/joho/godotenv"
 )
 
 var (
@@ -17,6 +21,25 @@ var (
 	SupabaseURL = "https://hlbilthxcozyqolbkkok.supabase.co"
 	SupabaseKey = ""
 )
+
+func init() {
+	// Try to load .env file (if it exists)
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Could not load .env file: %v", err)
+	}
+
+	// Load from environment variables
+	SupabaseURL = os.Getenv("SUPABASE_URL")
+	SupabaseKey = os.Getenv("SUPABASE_KEY")
+
+	// Fallback to build-time embedded values for backward compatibility
+	if SupabaseURL == "" {
+		SupabaseURL = "https://hlbilthxcozyqolbkkok.supabase.co"
+	}
+	if SupabaseKey == "" {
+		SupabaseKey = ""
+	}
+}
 
 type Payload struct {
 	DeviceID   string             `json:"device_id"`
@@ -27,8 +50,8 @@ type Payload struct {
 }
 
 func Send(ctx context.Context, cfg *config.Config, sysInfo *osinfo.SystemInfo) error {
-	if SupabaseURL == "" || SupabaseKey == "" || SupabaseURL == "https://placeholder.supabase.co" || SupabaseKey == "placeholder-key" {
-		return fmt.Errorf("supabase URL/key not embedded at build time")
+	if SupabaseURL == "" || SupabaseKey == "" {
+		return fmt.Errorf("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
 	}
 
 	payload := Payload{
