@@ -6,7 +6,7 @@
 *.dylib
 
 # Build output directory
-build/
+# build/
 bin/
 
 # Test binary, built with `go test -c`
@@ -37,6 +37,6 @@ ehthumbs.db
 Thumbs.db
 
 # Environment files
-.env
+*.env
 .env.local
 .env.*.local

@@ -17,7 +17,6 @@ import (
 )
 
 var (
-	// Build-time embedded via ldflags
 	SupabaseURL = ""
 	SupabaseKey = ""
 )
