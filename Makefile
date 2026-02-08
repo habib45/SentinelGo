@@ -1,15 +1,17 @@
 # SentinelGo Makefile
-# Build with Supabase credentials embedded at build time
+# Build for release with environment variable configuration
 
-# Set these before building, e.g.:
-# export SUPABASE_URL=https://myproject.supabase.co
-# export SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+# Version can be set via:
+# - git tag (automatically detected)
+# - VERSION env var
+# - defaults to "dev"
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-# Build flags
-LDFLAGS=-ldflags "-X sentinelgo/internal/heartbeat.SupabaseURL=$(SUPABASE_URL) -X sentinelgo/internal/heartbeat.SupabaseKey=$(SUPABASE_KEY)"
+# Build flags for version injection
+LDFLAGS=-ldflags "-X sentinelgo/internal/config.Version=$(VERSION)"
 
 # Targets
-.PHONY: build clean all windows linux macos
+.PHONY: build clean all windows linux macos release
 
 all: windows linux macos
 
@@ -24,10 +26,33 @@ macos:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o build/darwin/sentinelgo-darwin-amd64 ./cmd/sentinelgo
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o build/darwin/sentinelgo-darwin-arm64 ./cmd/sentinelgo
 
+# Build all platforms for release
+release: clean all
+	@echo "Release built with version $(VERSION)"
+	@echo "Assets created in build/ directory:"
+	@find build -type f -name "*sentinelgo*" -exec ls -lh {} \;
+
 clean:
 	rm -rf build/
 
+# Development build (current platform only)
+build:
+	go build $(LDFLAGS) -o bin/sentinelgo ./cmd/sentinelgo
+
+# Install dependencies
+deps:
+	go mod download
+	go mod tidy
+
+# Run tests
+test:
+	go test ./...
+
+# Create release assets directory structure
+setup:
+	mkdir -p build/windows build/linux build/darwin
+
 # Example usage:
-# export SUPABASE_URL=https://myproject.supabase.co
-# export SUPABASE_KEY=your-anon-key
-# make all
+# make release VERSION=v1.0.0
+# make release (uses git tag or "dev")
+# make build (development build for current platform)

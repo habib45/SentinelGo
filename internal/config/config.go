@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+var (
+	// Version can be injected at build time via ldflags
+	Version = "dev"
+)
+
 type Config struct {
 	Path              string        `json:"-"` // Path to the config file
 	HeartbeatInterval time.Duration `json:"heartbeat_interval"`
@@ -22,9 +27,9 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Path:              path,
 		HeartbeatInterval: 5 * time.Minute,
-		GitHubOwner:       "your-org",
-		GitHubRepo:        "sentinelgo",
-		CurrentVersion:    "v0.1.0",
+		GitHubOwner:       "habib45",
+		GitHubRepo:        "SentinelGo",
+		CurrentVersion:    Version, // Use injected version
 	}
 
 	if path == "" {

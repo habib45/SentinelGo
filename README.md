@@ -16,6 +16,28 @@ Cross‑platform Go agent/service that:
 
 ## Build from Source
 
+### Quick Build (Development)
+```bash
+# Build for current platform only
+make build
+
+# Or build all platforms
+make release
+```
+
+### Release Build
+```bash
+# Build with specific version
+make release VERSION=v1.0.0
+
+# Build using git tag (auto-detected)
+make release
+
+# Create GitHub release (requires gh CLI)
+./scripts/release.sh --release --version v1.0.0
+```
+
+### Environment Setup
 1. **Copy environment template**:
 ```bash
 cp .env.example .env
@@ -25,14 +47,10 @@ cp .env.example .env
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-supabase-anon-key
+API_TOKEN=your-api-token
 ```
 
-3. **Build the binary**:
-```bash
-make all
-```
-
-The Supabase credentials are now loaded from environment variables at runtime instead of being embedded in the binary.
+The Supabase credentials are loaded from environment variables at runtime instead of being embedded in the binary.
 
 ## Configuration (Optional)
 
@@ -43,6 +61,7 @@ The agent requires Supabase credentials to be set via environment variables. You
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-supabase-anon-key
+API_TOKEN=your-api-token
 ```
 
 ### Configuration Files
@@ -85,6 +104,39 @@ Sent to Supabase `/rest/v1/heartbeat`:
 - If newer, it downloads the matching asset for the current OS/arch.
 - It replaces the running binary and restarts.
 - On Windows, a batch script handles the replace-after-exit.
+
+## Development
+
+### Makefile Targets
+```bash
+make build          # Build for current platform
+make release        # Build all platforms
+make test           # Run tests
+make clean          # Clean build artifacts
+make deps           # Download dependencies
+```
+
+### Release Process
+1. **Tag the release**:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+2. **Automatic Release** (GitHub Actions will trigger):
+   - Runs tests
+   - Builds all platforms
+   - Creates GitHub release with assets
+
+3. **Manual Release** (alternative):
+```bash
+./scripts/release.sh --release --version v1.0.0
+```
+
+### Version Management
+- Versions are injected at build time via ldflags
+- Use semantic versioning (v1.0.0, v1.0.1, etc.)
+- Git tags are automatically detected for versioning
 
 ## Security Notes
 - The agent runs as root/Administrator to collect full metrics.

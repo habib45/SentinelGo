@@ -22,7 +22,18 @@ sudo cp sentinelgo-darwin-* /opt/sentinelgo/sentinelgo
 sudo chmod +x /opt/sentinelgo/sentinelgo
 ```
 
-## 4. (Optional) Create a Configuration File
+## 4. Set Environment Variables
+Create a `.env` file with your Supabase credentials:
+```bash
+sudo tee /opt/sentinelgo/.env > /dev/null <<'EOF'
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-anon-key
+API_TOKEN=your-api-token
+EOF
+sudo chmod 600 /opt/sentinelgo/.env
+```
+
+## 5. (Optional) Create a Configuration File
 ```bash
 sudo mkdir -p /etc/sentinelgo
 sudo tee /etc/sentinelgo/config.json > /dev/null <<'EOF'
@@ -35,7 +46,7 @@ sudo tee /etc/sentinelgo/config.json > /dev/null <<'EOF'
 EOF
 ```
 
-## 5. Create a launchd Agent
+## 6. Create a launchd Agent
 ```bash
 sudo tee /Library/LaunchDaemons/com.sentinelgo.agent.plist > /dev/null <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -62,19 +73,19 @@ sudo tee /Library/LaunchDaemons/com.sentinelgo.agent.plist > /dev/null <<'EOF'
 EOF
 ```
 
-## 6. Load and Start the Service
+## 7. Load and Start the Service
 ```bash
 sudo launchctl load -w /Library/LaunchDaemons/com.sentinelgo.agent.plist
 sudo launchctl start com.sentinelgo.agent
 ```
 
-## 7. Verify
+## 8. Verify
 ```bash
 sudo launchctl list | grep sentinelgo
 ```
 You should see `com.sentinelgo.agent` with a PID.
 
-## 8. Uninstall (if needed)
+## 9. Uninstall (if needed)
 ```bash
 sudo launchctl unload -w /Library/LaunchDaemons/com.sentinelgo.agent.plist
 sudo rm -f /Library/LaunchDaemons/com.sentinelgo.agent.plist
@@ -89,7 +100,7 @@ tail -f /var/log/sentinelgo.err
 ```
 
 ## Notes
-- Supabase connection is embedded at build time; users do not configure it.
+- Supabase connection is configured via environment variables in `/opt/sentinelgo/.env`.
 - The agent checks for updates once every 24 hours.
 - Heartbeat is sent every 5 minutes (configurable).
 - Runs as root (launchd daemon) to collect full system metrics.

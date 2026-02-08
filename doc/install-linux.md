@@ -28,6 +28,7 @@ Create a `.env` file with your Supabase credentials:
 sudo tee /opt/sentinelgo/.env > /dev/null <<'EOF'
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-supabase-anon-key
+API_TOKEN=your-api-token
 EOF
 sudo chmod 600 /opt/sentinelgo/.env
 ```

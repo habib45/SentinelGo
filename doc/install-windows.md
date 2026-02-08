@@ -22,7 +22,17 @@ mkdir C:\ProgramFiles\SentinelGo
 Copy-Item -Path .\sentinelgo-windows-amd64.exe -Destination C:\ProgramFiles\SentinelGo\sentinelgo.exe
 ```
 
-## 4. (Optional) Create a Configuration File
+## 4. Set Environment Variables
+Create a `.env` file with your Supabase credentials:
+```powershell
+@"
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-anon-key
+API_TOKEN=your-api-token
+"@ | Out-File -FilePath "C:\ProgramFiles\SentinelGo\.env" -Encoding UTF8
+```
+
+## 5. (Optional) Create a Configuration File
 If you want to override defaults, create:
 ```
 C:\ProgramData\sentinelgo\config.json
@@ -37,7 +47,7 @@ Example:
 }
 ```
 
-## 5. Install as a Windows Service
+## 6. Install as a Windows Service
 Run PowerShell as Administrator:
 ```powershell
 cd C:\ProgramFiles\SentinelGo
@@ -46,18 +56,18 @@ cd C:\ProgramFiles\SentinelGo
 
 The service will be named **SentinelGo** and set to start automatically.
 
-## 6. Start the Service
+## 7. Start the Service
 ```powershell
 Start-Service SentinelGo
 ```
 
-## 7. Verify
+## 8. Verify
 ```powershell
 Get-Service SentinelGo
 ```
 Status should be **Running**.
 
-## 8. Uninstall (if needed)
+## 9. Uninstall (if needed)
 ```powershell
 Stop-Service SentinelGo
 .\sentinelgo.exe -uninstall
@@ -67,7 +77,7 @@ Stop-Service SentinelGo
 Windows Event Viewer → Windows Logs → Application → Source “SentinelGo”.
 
 ## Notes
-- Supabase connection is embedded at build time; users do not configure it.
+- Supabase connection is configured via environment variables in `C:\ProgramFiles\SentinelGo\.env`.
 - The agent checks for updates once every 24 hours.
 - Heartbeat is sent every 5 minutes (configurable).
 - The service runs under the LocalSystem account.
