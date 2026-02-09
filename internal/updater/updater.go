@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 
 	"sentinelgo/internal/config"
 )
@@ -31,6 +30,7 @@ func CheckAndApply(ctx context.Context, cfg *config.Config) error {
 	}
 
 	if latest.TagName == cfg.CurrentVersion {
+		fmt.Printf("Already up to date: %s\n", latest.TagName)
 		return nil // already up-to-date
 	}
 
@@ -39,6 +39,7 @@ func CheckAndApply(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("select asset: %w", err)
 	}
 
+	fmt.Printf("Found update: %s -> %s\n", cfg.CurrentVersion, latest.TagName)
 	newPath, err := downloadAndReplace(ctx, assetURL, latest.TagName)
 	if err != nil {
 		return fmt.Errorf("download and replace: %w", err)
@@ -56,6 +57,7 @@ func CheckAndApply(ctx context.Context, cfg *config.Config) error {
 
 func fetchLatestRelease(ctx context.Context, cfg *config.Config) (*GitHubRelease, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", cfg.GitHubOwner, cfg.GitHubRepo)
+	fmt.Printf("Fetching release from: %s\n", url)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -76,6 +78,8 @@ func fetchLatestRelease(ctx context.Context, cfg *config.Config) (*GitHubRelease
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("Fetched release: %s with %d assets\n", rel.TagName, len(rel.Assets))
 	return &rel, nil
 }
 
@@ -91,8 +95,17 @@ func selectAsset(rel *GitHubRelease, goos, goarch string) (string, error) {
 	}
 
 	pattern := fmt.Sprintf("sentinelgo-%s-%s%s", goos, goarch, suffix)
+	fmt.Printf("Looking for asset: %s\n", pattern)
+	fmt.Printf("Available assets: %v\n", func() (names []string) {
+		for _, asset := range rel.Assets {
+			names = append(names, asset.Name)
+		}
+		return
+	}())
+
 	for _, asset := range rel.Assets {
-		if strings.HasSuffix(asset.Name, pattern) {
+		if asset.Name == pattern {
+			fmt.Printf("Found matching asset: %s\n", asset.Name)
 			return asset.URL, nil
 		}
 	}
