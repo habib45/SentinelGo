@@ -20,11 +20,11 @@ windows:
 
 linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o build/linux/sentinelgo-linux-amd64 ./cmd/sentinelgo
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o build/linux/sentinelgo-linux-arm64 ./cmd/sentinelgo
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o build/linux/sentinelgo-linux-arm86_64 ./cmd/sentinelgo
 
 macos:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o build/darwin/sentinelgo-darwin-amd64 ./cmd/sentinelgo
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o build/darwin/sentinelgo-darwin-arm64 ./cmd/sentinelgo
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o build/darwin/sentinelgo-darwin-arm86_64 ./cmd/sentinelgo
 
 # Build all platforms for release
 release: clean all
