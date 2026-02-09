@@ -32,8 +32,9 @@ func Send(ctx context.Context, cfg *config.Config, sysInfo *osinfo.SystemInfo) e
 	payload := Payload{
 		DeviceID: cfg.DeviceID,
 		Alive:    "true",
+		BSID:     sysInfo.EmployeeId,
 	}
-	// BSID:     sysInfo.EmployeeId,
+
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
