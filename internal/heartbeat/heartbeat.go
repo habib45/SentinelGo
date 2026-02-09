@@ -21,6 +21,7 @@ type Payload struct {
 	DeviceID string `json:"device_id"`
 	Alive    string `json:"alive"`
 	BSID     string `json:"employee_id"`
+	OS       string `json:"os"`
 }
 
 func init() {
@@ -33,6 +34,7 @@ func Send(ctx context.Context, cfg *config.Config, sysInfo *osinfo.SystemInfo) e
 		DeviceID: cfg.DeviceID,
 		Alive:    "true",
 		BSID:     sysInfo.EmployeeId,
+		OS:       sysInfo.OS,
 	}
 
 	body, err := json.Marshal(payload)
