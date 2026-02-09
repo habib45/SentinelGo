@@ -61,6 +61,7 @@ Description=SentinelGo Agent
 After=network.target
 
 [Service]
+WorkingDirectory=/opt/sentinelgo
 Type=simple
 ExecStart=/opt/sentinelgo/sentinelgo -run
 Restart=on-failure
