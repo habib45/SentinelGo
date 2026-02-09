@@ -20,6 +20,7 @@ var (
 type Payload struct {
 	DeviceID string `json:"device_id"`
 	Alive    string `json:"alive"`
+	BSID     string `json:"employee_id"`
 }
 
 func init() {
@@ -32,7 +33,7 @@ func Send(ctx context.Context, cfg *config.Config, sysInfo *osinfo.SystemInfo) e
 		DeviceID: cfg.DeviceID,
 		Alive:    "true",
 	}
-
+	// BSID:     sysInfo.EmployeeId,
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)

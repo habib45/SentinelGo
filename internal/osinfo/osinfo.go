@@ -23,6 +23,7 @@ type SystemInfo struct {
 	Memory      MemoryInfo `json:"memory"`
 	Disk        DiskInfo   `json:"disk"`
 	Network     []NetInfo  `json:"network"`
+	EmployeeId  string     `json:"employee_id"`
 }
 
 type CPUInfo struct {
@@ -101,6 +102,7 @@ func Collect() *SystemInfo {
 			Used:  diskInfo.Used,
 			Free:  diskInfo.Free,
 		},
-		Network: netStats,
+		Network:    netStats,
+		EmployeeId: hInfo.Hostname,
 	}
 }

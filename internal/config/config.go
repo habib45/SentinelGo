@@ -28,7 +28,7 @@ func Load(path string) (*Config, error) {
 		Path:              path,
 		HeartbeatInterval: 5 * time.Minute,
 		GitHubOwner:       "habib45",
-		GitHubRepo:        "SentinelGo-build",
+		GitHubRepo:        "SentinelGo",
 		CurrentVersion:    Version, // Use injected version
 	}
 
