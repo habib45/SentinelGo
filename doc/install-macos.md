@@ -18,7 +18,10 @@ sudo mkdir -p /opt/sentinelgo
 
 ## 3. Copy the Binary
 ```bash
-sudo cp sentinelgo-darwin-* /opt/sentinelgo/sentinelgo
+sudo cp sentinelgo-darwin-amd64 /opt/sentinelgo/sentinelgo
+OR 
+sudo cp sentinelgo-darwin-armd64 /opt/sentinelgo/sentinelgo
+
 sudo chmod +x /opt/sentinelgo/sentinelgo
 sudo chown -R $(whoami) /opt/sentinelgo
 
@@ -55,6 +58,18 @@ This will automatically:
 - Configure the service to start automatically on system boot
 - Set up logging to `/var/log/sentinelgo.log` and `/var/log/sentinelgo.err`
 
+### Important Notes MAC Alert “sentinelgo” Not Opened
+
+**Allow from System Settings (recommended)**
+1. Try to run the command again so the warning appears.
+2. Open System Settings → Privacy & Security
+3. Scroll down to the bottom.
+4. You’ll see:“sentinelgo was blocked because it is not from an identified developer”
+5. Click Allow Anyway
+6. Run the command again.
+7. This time click Open
+
+
 ## 6. Verify Installation
 ```bash
 # Check service status
@@ -78,7 +93,7 @@ Shows all running SentinelGo processes and launchd service status.
 ```
 Stops all running SentinelGo processes safely.
 
-### Run in Foreground (for testing)
+### Run in Foreground 
 ```bash
 ./sentinelgo -run
 ```
