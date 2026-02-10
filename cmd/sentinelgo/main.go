@@ -341,7 +341,6 @@ func createLaunchdPlist() error {
   <array>
     <string>/opt/sentinelgo/sentinelgo</string>
     <string>-run</string>
-    <string>-version=%s</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -356,7 +355,7 @@ func createLaunchdPlist() error {
   <key>Comment</key>
   <string>SentinelGo Agent v%s - Cross-platform system monitoring</string>
 </dict>
-</plist>`, currentVersion, currentVersion)
+</plist>`, currentVersion)
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll("/Library/LaunchDaemons", 0755); err != nil {

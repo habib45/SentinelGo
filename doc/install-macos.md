@@ -20,6 +20,8 @@ sudo mkdir -p /opt/sentinelgo
 ```bash
 sudo cp sentinelgo-darwin-* /opt/sentinelgo/sentinelgo
 sudo chmod +x /opt/sentinelgo/sentinelgo
+sudo chown -R $(whoami) /opt/sentinelgo
+
 ```
 
 ## 4. (Optional) Create a Configuration File
@@ -30,7 +32,7 @@ sudo tee /etc/sentinelgo/config.json > /dev/null <<'EOF'
   "heartbeat_interval": "5m",
   "github_owner": "habib45",
   "github_repo": "SentinelGo",
-  "current_version": "v0.1.0"
+  "current_version": "v1.0.0"
 }
 EOF
 ```
@@ -44,6 +46,7 @@ cd /opt/sentinelgo
 
 # Install as launchd service (requires sudo)
 sudo ./sentinelgo -install
+sudo chown -R $(whoami) ~/.sentinelgo
 ```
 
 This will automatically:
