@@ -90,7 +90,7 @@ func Collect() *SystemInfo {
 	// Normalize OS name for better readability
 	osName := hInfo.OS
 	if runtime.GOOS == "darwin" {
-		osName = "mac"
+		osName = "IOS"
 	} else if runtime.GOOS == "linux" {
 		osName = "linux"
 	} else if runtime.GOOS == "windows" {
