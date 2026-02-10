@@ -142,7 +142,7 @@ func parseProcessOutput(output string) []ProcessInfo {
 				}
 			}
 		case "linux", "darwin":
-			if strings.Contains(line, "sentinelgo") && !strings.Contains(line, "grep") {
+			if strings.Contains(line, "sentinelgo") && !strings.Contains(line, "grep") && !strings.Contains(line, "systemctl") && !strings.Contains(line, "journalctl") && !strings.Contains(line, "editor") {
 				fields := strings.Fields(line)
 				if len(fields) >= 2 {
 					pid, _ := strconv.Atoi(fields[1])
