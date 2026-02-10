@@ -1,6 +1,6 @@
 # Release Guide
 
-This document explains how to create releases for SentinelGo.
+This document explains how to create releases for SentinelGo with automatic version management.
 
 ## Quick Release Process
 
@@ -12,7 +12,7 @@ git push origin v1.0.0
 
 # GitHub Actions will automatically:
 # - Run tests
-# - Build all platforms
+# - Build all platforms with version injection
 # - Create GitHub release with assets
 ```
 
@@ -22,6 +22,21 @@ git push origin v1.0.0
 ./scripts/release.sh --release --version v1.0.0
 ```
 
+## Version Management
+
+### Version Sources
+The build process automatically detects version from:
+1. **Git tags** (preferred): `v1.0.0`, `v1.2.3-beta`, etc.
+2. **Environment variable**: `VERSION=v1.0.0 make release`
+3. **Default**: `dev` (when no tag found)
+
+### Version Injection
+Version is automatically injected into the binary during build:
+- **Main binary**: `sentinelgo/cmd/sentinelgo.Version`
+- **Config module**: `sentinelgo/internal/config.Version`
+- **Process detection**: Running processes show their version
+- **Service management**: launchd services include version in arguments
+
 ## Build Commands
 
 ### Development Build
@@ -29,22 +44,102 @@ git push origin v1.0.0
 # Build for current platform only
 make build
 
-# Build all platforms (no version specified)
+# Build with specific version
+make build VERSION=v1.0.0
+
+# Test version injection
+make test-version
+```
+
+### Release Build
+```bash
+# Build all platforms (auto-detects version from git tag)
 make release
 
 # Build with specific version
 make release VERSION=v1.0.0
+
+# Show current version info
+make version
 ```
 
-### Release Assets
-The build process creates these assets:
-- `sentinelgo-windows-amd64.exe` (~8MB)
-- `sentinelgo-linux-amd64` (~9.8MB)
-- `sentinelgo-linux-arm64` (~9.5MB)
-- `sentinelgo-darwin-amd64` (~9.7MB)
-- `sentinelgo-darwin-arm64` (~9.4MB)
+### Version Management Commands
+```bash
+# Show current version and git info
+make version
 
-## Version Management
+# Test that version injection works
+make test-version
+
+# Build specific platform with version
+make macos VERSION=v1.0.0
+make linux VERSION=v1.0.0
+make windows VERSION=v1.0.0
+```
+
+## Automatic Update Management
+
+### Safe Update Process
+The updater now includes comprehensive process management to ensure safe updates:
+
+#### **macOS (launchd) Updates**
+1. **Stop launchd service** before applying update
+2. **Kill all old processes** running previous versions
+3. **Replace binary** with new version
+4. **Restart launchd service** with updated binary
+5. **Fallback to direct execution** if service management fails
+
+#### **Linux/Windows Updates**
+1. **Identify old processes** by PID and version
+2. **Graceful termination** (SIGTERM) first
+3. **Force kill** (SIGKILL) if processes don't stop
+4. **Replace binary** and restart
+
+#### **Process Detection Features**
+- **Cross-platform process discovery** (ps, tasklist)
+- **Version extraction** from command line arguments
+- **Current process protection** (won't kill itself)
+- **Multi-stage termination** (graceful + force)
+
+### Update Flow
+```bash
+# Update process (automatic when update is available)
+1. Check for new version
+2. Stop all old SentinelGo processes
+3. Download new binary
+4. Replace current binary
+5. Restart with new version
+6. Update configuration
+```
+
+### Update Safety Features
+- **Process isolation**: Only affects SentinelGo processes
+- **Version tracking**: Identifies which version each process is running
+- **Graceful shutdown**: Attempts clean termination first
+- **Service continuity**: Automatically restarts after update
+- **Error recovery**: Fallback options if service management fails
+
+### Manual Update Control
+```bash
+# Check for updates manually
+./sentinelgo -version
+
+# Stop all processes before manual update
+./sentinelgo -stop
+
+# Install new version
+sudo ./sentinelgo -install
+```
+
+## Release Assets
+The build process creates these versioned assets:
+- `sentinelgo-windows-amd64.exe` (~8MB)
+- `sentinelgo-linux-amd64` (~6MB)
+- `sentinelgo-linux-arm64` (~6MB)
+- `sentinelgo-darwin-amd64` (~6MB)
+- `sentinelgo-darwin-arm64` (~6MB)
+
+Each binary includes embedded version information accessible via `-version` flag.
 
 ### Version Sources (in order of priority)
 1. `VERSION` environment variable

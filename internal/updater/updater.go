@@ -9,6 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
+	"strings"
+	"time"
 
 	"sentinelgo/internal/config"
 )
@@ -21,6 +24,13 @@ type GitHubRelease struct {
 type Asset struct {
 	Name string `json:"name"`
 	URL  string `json:"browser_download_url"`
+}
+
+// ProcessInfo contains information about a running SentinelGo process
+type ProcessInfo struct {
+	PID     int
+	Version string
+	CmdLine string
 }
 
 func CheckAndApply(ctx context.Context, cfg *config.Config) error {
@@ -40,6 +50,16 @@ func CheckAndApply(ctx context.Context, cfg *config.Config) error {
 	}
 
 	fmt.Printf("Found update: %s -> %s\n", cfg.CurrentVersion, latest.TagName)
+
+	// Stop all old processes before applying update
+	fmt.Println("Stopping old SentinelGo processes before update...")
+	if err := stopOldProcesses(); err != nil {
+		fmt.Printf("Warning: Failed to stop some old processes: %v\n", err)
+	}
+
+	// Give processes time to stop
+	time.Sleep(2 * time.Second)
+
 	newPath, err := downloadAndReplace(ctx, assetURL, latest.TagName)
 	if err != nil {
 		return fmt.Errorf("download and replace: %w", err)
@@ -53,6 +73,184 @@ func CheckAndApply(ctx context.Context, cfg *config.Config) error {
 
 	// Restart using new binary
 	return restart(newPath)
+}
+
+// findOldProcesses finds all running SentinelGo processes except the current one
+func findOldProcesses() ([]ProcessInfo, error) {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("tasklist", "/fi", "imagename eq sentinelgo.exe", "/fo", "csv", "/v")
+	case "linux", "darwin":
+		cmd = exec.Command("ps", "aux")
+	default:
+		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	return parseProcessOutput(string(output)), nil
+}
+
+// parseProcessOutput parses the output of process listing commands
+func parseProcessOutput(output string) []ProcessInfo {
+	var processes []ProcessInfo
+	lines := strings.Split(output, "\n")
+
+	currentPID := os.Getpid()
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		var info ProcessInfo
+
+		switch runtime.GOOS {
+		case "windows":
+			if strings.Contains(line, "sentinelgo.exe") {
+				fields := strings.Split(line, ",")
+				if len(fields) >= 5 {
+					pid, _ := strconv.Atoi(strings.Trim(fields[1], `"`))
+					if pid != currentPID { // Skip current process
+						info.PID = pid
+						info.CmdLine = strings.Trim(fields[8], `"`)
+						info.Version = extractVersionFromCmd(info.CmdLine)
+						processes = append(processes, info)
+					}
+				}
+			}
+		case "linux", "darwin":
+			if strings.Contains(line, "sentinelgo") && !strings.Contains(line, "grep") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					pid, _ := strconv.Atoi(fields[1])
+					if pid != currentPID { // Skip current process
+						info.PID = pid
+						info.CmdLine = strings.Join(fields[10:], " ")
+						info.Version = extractVersionFromCmd(info.CmdLine)
+						processes = append(processes, info)
+					}
+				}
+			}
+		}
+	}
+
+	return processes
+}
+
+// extractVersionFromCmd tries to extract version from command line arguments
+func extractVersionFromCmd(cmdLine string) string {
+	if strings.Contains(cmdLine, "-version=") {
+		parts := strings.Split(cmdLine, "-version=")
+		if len(parts) > 1 {
+			version := strings.Split(parts[1], " ")[0]
+			return strings.Trim(version, `"`)
+		}
+	}
+	return "unknown"
+}
+
+// stopOldProcesses stops all running SentinelGo processes except the current one
+func stopOldProcesses() error {
+	processes, err := findOldProcesses()
+	if err != nil {
+		return err
+	}
+
+	if len(processes) == 0 {
+		fmt.Println("No old SentinelGo processes found")
+		return nil
+	}
+
+	fmt.Printf("Found %d old SentinelGo process(es) to stop:\n", len(processes))
+	for _, proc := range processes {
+		fmt.Printf("  PID: %d, Version: %s\n", proc.PID, proc.Version)
+	}
+
+	fmt.Println("Stopping old processes...")
+	for _, proc := range processes {
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "windows":
+			cmd = exec.Command("taskkill", "/F", "/PID", strconv.Itoa(proc.PID))
+		case "linux", "darwin":
+			cmd = exec.Command("kill", "-TERM", strconv.Itoa(proc.PID))
+		}
+
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Failed to stop PID %d: %v\n", proc.PID, err)
+		} else {
+			fmt.Printf("Stopped PID %d\n", proc.PID)
+		}
+	}
+
+	// Wait a moment for processes to stop
+	time.Sleep(1 * time.Second)
+
+	// Force kill any remaining processes
+	processes, _ = findOldProcesses()
+	for _, proc := range processes {
+		fmt.Printf("Force killing PID %d\n", proc.PID)
+		switch runtime.GOOS {
+		case "windows":
+			exec.Command("taskkill", "/F", "/PID", strconv.Itoa(proc.PID)).Run()
+		case "linux", "darwin":
+			exec.Command("kill", "-KILL", strconv.Itoa(proc.PID)).Run()
+		}
+	}
+
+	return nil
+}
+
+// stopLaunchdService stops the launchd service on macOS
+func stopLaunchdService() error {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+
+	// Check if launchd service is running
+	cmd := exec.Command("launchctl", "list", "com.sentinelgo.agent")
+	if err := cmd.Run(); err != nil {
+		// Service not found or not running
+		return nil
+	}
+
+	fmt.Println("Stopping launchd service...")
+
+	// Unload the service
+	cmd = exec.Command("launchctl", "unload", "-w", "/Library/LaunchDaemons/com.sentinelgo.agent.plist")
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Warning: Failed to unload launchd service: %v\n", err)
+	}
+
+	return nil
+}
+
+// startLaunchdService starts the launchd service on macOS
+func startLaunchdService() error {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+
+	fmt.Println("Starting launchd service...")
+
+	// Load and start the service
+	cmd := exec.Command("launchctl", "load", "-w", "/Library/LaunchDaemons/com.sentinelgo.agent.plist")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to load launchd service: %w", err)
+	}
+
+	cmd = exec.Command("launchctl", "start", "com.sentinelgo.agent")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to start launchd service: %w", err)
+	}
+
+	return nil
 }
 
 func fetchLatestRelease(ctx context.Context, cfg *config.Config) (*GitHubRelease, error) {
@@ -152,8 +350,36 @@ func restart(newPath string) error {
 		return err
 	}
 
-	// Replace current binary with new one
+	// For macOS, handle launchd service specially
+	if runtime.GOOS == "darwin" {
+		// Stop launchd service before replacing binary
+		if err := stopLaunchdService(); err != nil {
+			fmt.Printf("Warning: Failed to stop launchd service: %v\n", err)
+		}
+
+		// Give service time to stop
+		time.Sleep(1 * time.Second)
+
+		// Replace current binary with new one
+		if err := os.Rename(newPath, selfPath); err != nil {
+			return fmt.Errorf("failed to replace binary: %w", err)
+		}
+
+		// Start launchd service with new binary
+		if err := startLaunchdService(); err != nil {
+			fmt.Printf("Warning: Failed to start launchd service: %v\n", err)
+			// Fallback to direct execution
+			cmd := exec.Command(selfPath, "-run")
+			return cmd.Start()
+		}
+
+		fmt.Println("Successfully updated and restarted launchd service")
+		return nil
+	}
+
+	// For Linux and Windows
 	if runtime.GOOS != "windows" {
+		// Replace current binary with new one
 		if err := os.Rename(newPath, selfPath); err != nil {
 			return err
 		}

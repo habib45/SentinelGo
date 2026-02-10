@@ -2,6 +2,7 @@ package osinfo
 
 import (
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -78,10 +79,28 @@ func Collect() *SystemInfo {
 		})
 	}
 
+	// Clean up hostname for macOS (remove .local suffix)
+	hostname := hInfo.Hostname
+	if runtime.GOOS == "darwin" {
+		hostname = strings.TrimSuffix(hostname, ".local")
+		hostname = strings.TrimSuffix(hostname, ".lan")
+		hostname = strings.TrimSuffix(hostname, ".home")
+	}
+
+	// Normalize OS name for better readability
+	osName := hInfo.OS
+	if runtime.GOOS == "darwin" {
+		osName = "mac"
+	} else if runtime.GOOS == "linux" {
+		osName = "linux"
+	} else if runtime.GOOS == "windows" {
+		osName = "windows"
+	}
+
 	return &SystemInfo{
 		Timestamp:   time.Now(),
 		Hostname:    hInfo.Hostname,
-		OS:          hInfo.OS,
+		OS:          osName,
 		Platform:    hInfo.Platform,
 		PlatformVer: hInfo.PlatformVersion,
 		Arch:        runtime.GOARCH,
@@ -103,6 +122,6 @@ func Collect() *SystemInfo {
 			Free:  diskInfo.Free,
 		},
 		Network:    netStats,
-		EmployeeId: hInfo.Hostname,
+		EmployeeId: hostname,
 	}
 }

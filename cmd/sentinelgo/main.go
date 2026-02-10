@@ -23,6 +23,11 @@ import (
 )
 
 var (
+	// Build version injected at build time
+	Version = config.Version
+)
+
+var (
 	logger service.Logger
 )
 
@@ -129,14 +134,10 @@ func parseProcessOutput(output string) []ProcessInfo {
 					info.CmdLine = strings.Trim(fields[8], `"`)
 					info.Status = "Running"
 
-					// Try to extract version from command line
-					if strings.Contains(info.CmdLine, "-version=") {
-						parts := strings.Split(info.CmdLine, "-version=")
-						if len(parts) > 1 {
-							info.Version = strings.Split(parts[1], " ")[0]
-						}
-					} else {
-						info.Version = "unknown"
+					// Extract version from command line or use getBinaryVersion
+					info.Version = extractVersionFromCmd(info.CmdLine)
+					if info.Version == "unknown" {
+						info.Version = getBinaryVersion(info.CmdLine)
 					}
 				}
 			}
@@ -149,14 +150,10 @@ func parseProcessOutput(output string) []ProcessInfo {
 					info.CmdLine = strings.Join(fields[10:], " ")
 					info.Status = "Running"
 
-					// Try to extract version from command line
-					if strings.Contains(info.CmdLine, "-version=") {
-						parts := strings.Split(info.CmdLine, "-version=")
-						if len(parts) > 1 {
-							info.Version = strings.Split(parts[1], " ")[0]
-						}
-					} else {
-						info.Version = "unknown"
+					// Extract version from command line or use getBinaryVersion
+					info.Version = extractVersionFromCmd(info.CmdLine)
+					if info.Version == "unknown" {
+						info.Version = getBinaryVersion(info.CmdLine)
 					}
 				}
 			}
@@ -168,6 +165,73 @@ func parseProcessOutput(output string) []ProcessInfo {
 	}
 
 	return processes
+}
+
+// extractVersionFromCmd tries to extract version from command line arguments
+func extractVersionFromCmd(cmdLine string) string {
+	// Look for -version flag in command line
+	if strings.Contains(cmdLine, "-version=") {
+		parts := strings.Split(cmdLine, "-version=")
+		if len(parts) > 1 {
+			version := strings.Split(parts[1], " ")[0]
+			return strings.Trim(version, `"`)
+		}
+	}
+
+	// Look for version flag as separate argument
+	if strings.Contains(cmdLine, "-version") || strings.Contains(cmdLine, "--version") {
+		// Try to find version after the flag
+		parts := strings.Fields(cmdLine)
+		for i, part := range parts {
+			if (part == "-version" || part == "--version") && i+1 < len(parts) {
+				return strings.Trim(parts[i+1], `"`)
+			}
+		}
+	}
+
+	return "unknown"
+}
+
+// getBinaryVersion tries to get version from the binary executable
+func getBinaryVersion(cmdLine string) string {
+	// Extract binary path from command line
+	var binaryPath string
+	parts := strings.Fields(cmdLine)
+
+	if len(parts) > 0 {
+		binaryPath = parts[0]
+		// Handle relative paths
+		if !strings.Contains(binaryPath, "/") && runtime.GOOS != "windows" {
+			// Try to find binary in PATH
+			if path, err := exec.LookPath(binaryPath); err == nil {
+				binaryPath = path
+			}
+		}
+	}
+
+	// Try to get version by running binary with -version flag
+	if binaryPath != "" {
+		cmd := exec.Command(binaryPath, "-version")
+		output, err := cmd.Output()
+		if err == nil {
+			outputStr := string(output)
+			// Parse version output
+			lines := strings.Split(outputStr, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "version:") || strings.Contains(line, "version") {
+					// Extract version from line like "SentinelGo version: v1.0.0"
+					parts := strings.Fields(line)
+					for i, part := range parts {
+						if strings.Contains(part, "version") && i+1 < len(parts) {
+							return strings.Trim(parts[i+1], ",")
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return "unknown"
 }
 
 // stopSentinelGoProcesses stops all running SentinelGo processes
@@ -261,7 +325,13 @@ func showSentinelGoStatus() error {
 
 // macOS specific launchd service management
 func createLaunchdPlist() error {
-	plistContent := `<?xml version="1.0" encoding="UTF-8"?>
+	// Get current version for the plist
+	currentVersion := Version
+	if currentVersion == "" {
+		currentVersion = "unknown"
+	}
+
+	plistContent := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -271,6 +341,7 @@ func createLaunchdPlist() error {
   <array>
     <string>/opt/sentinelgo/sentinelgo</string>
     <string>-run</string>
+    <string>-version=%s</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -282,8 +353,10 @@ func createLaunchdPlist() error {
   <string>/var/log/sentinelgo.err</string>
   <key>WorkingDirectory</key>
   <string>/opt/sentinelgo</string>
+  <key>Comment</key>
+  <string>SentinelGo Agent v%s - Cross-platform system monitoring</string>
 </dict>
-</plist>`
+</plist>`, currentVersion, currentVersion)
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll("/Library/LaunchDaemons", 0755); err != nil {
@@ -352,7 +425,15 @@ func main() {
 	run := flag.Bool("run", false, "Run in foreground (console mode)")
 	status := flag.Bool("status", false, "Show running SentinelGo processes and versions")
 	stop := flag.Bool("stop", false, "Stop all running SentinelGo processes")
+	version := flag.Bool("version", false, "Show version information")
 	flag.Parse()
+
+	// Handle version flag
+	if *version {
+		fmt.Printf("SentinelGo version: %s\n", Version)
+		fmt.Printf("Build info: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+		return
+	}
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
