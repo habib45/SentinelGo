@@ -22,18 +22,7 @@ sudo cp sentinelgo-darwin-* /opt/sentinelgo/sentinelgo
 sudo chmod +x /opt/sentinelgo/sentinelgo
 ```
 
-## 4. Set Environment Variables
-Create a `.env` file with your Supabase credentials:
-```bash
-sudo tee /opt/sentinelgo/.env > /dev/null <<'EOF'
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-supabase-anon-key
-API_TOKEN=your-api-token
-EOF
-sudo chmod 600 /opt/sentinelgo/.env
-```
-
-## 5. (Optional) Create a Configuration File
+## 4. (Optional) Create a Configuration File
 ```bash
 sudo mkdir -p /etc/sentinelgo
 sudo tee /etc/sentinelgo/config.json > /dev/null <<'EOF'
@@ -46,8 +35,63 @@ sudo tee /etc/sentinelgo/config.json > /dev/null <<'EOF'
 EOF
 ```
 
-## 6. Create a launchd Agent
+## 5. Install as Service (Recommended)
+The SentinelGo binary now includes automated macOS service management:
+
 ```bash
+# Navigate to the binary directory
+cd /opt/sentinelgo
+
+# Install as launchd service (requires sudo)
+sudo ./sentinelgo -install
+```
+
+This will automatically:
+- Create the launchd plist file at `/Library/LaunchDaemons/com.sentinelgo.agent.plist`
+- Load and start the service
+- Configure the service to start automatically on system boot
+- Set up logging to `/var/log/sentinelgo.log` and `/var/log/sentinelgo.err`
+
+## 6. Verify Installation
+```bash
+# Check service status
+./sentinelgo -status
+
+# Check launchd service specifically
+sudo launchctl list | grep sentinelgo
+```
+
+## 7. Service Management Commands
+
+### Check Status
+```bash
+./sentinelgo -status
+```
+Shows all running SentinelGo processes and launchd service status.
+
+### Stop All Processes
+```bash
+./sentinelgo -stop
+```
+Stops all running SentinelGo processes safely.
+
+### Run in Foreground (for testing)
+```bash
+./sentinelgo -run
+```
+Runs the agent in console mode for debugging.
+
+### Uninstall Service
+```bash
+sudo ./sentinelgo -uninstall
+```
+Stops and removes the launchd service completely.
+
+## 8. Manual Installation (Alternative)
+If you prefer manual setup instead of the automated installation:
+
+```bash
+# Create launchd plist manually
 sudo tee /Library/LaunchDaemons/com.sentinelgo.agent.plist > /dev/null <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -68,24 +112,18 @@ sudo tee /Library/LaunchDaemons/com.sentinelgo.agent.plist > /dev/null <<'EOF'
   <string>/var/log/sentinelgo.log</string>
   <key>StandardErrorPath</key>
   <string>/var/log/sentinelgo.err</string>
+  <key>WorkingDirectory</key>
+  <string>/opt/sentinelgo</string>
 </dict>
 </plist>
 EOF
-```
 
-## 7. Load and Start the Service
-```bash
+# Load and start the service
 sudo launchctl load -w /Library/LaunchDaemons/com.sentinelgo.agent.plist
 sudo launchctl start com.sentinelgo.agent
 ```
 
-## 8. Verify
-```bash
-sudo launchctl list | grep sentinelgo
-```
-You should see `com.sentinelgo.agent` with a PID.
-
-## 9. Uninstall (if needed)
+## 9. Manual Uninstall (Alternative)
 ```bash
 sudo launchctl unload -w /Library/LaunchDaemons/com.sentinelgo.agent.plist
 sudo rm -f /Library/LaunchDaemons/com.sentinelgo.agent.plist
@@ -95,12 +133,67 @@ sudo rm -rf /etc/sentinelgo
 
 ## Logs
 ```bash
+# View application logs
 tail -f /var/log/sentinelgo.log
+
+# View error logs
 tail -f /var/log/sentinelgo.err
+
+# View launchd service logs
+log show --predicate 'process == "sentinelgo"' --last 1h
+```
+
+## Version Management
+The SentinelGo agent includes automatic version detection and management:
+
+```bash
+# Check which versions are running
+./sentinelgo -status
+
+# Before updating, stop old versions
+./sentinelgo -stop
+
+# Install new version
+sudo ./sentinelgo -install
+```
+
+The system will warn you if multiple versions are detected and help you clean up old instances.
+
+## Troubleshooting
+
+### Service Not Starting
+```bash
+# Check launchd service status
+sudo launchctl list com.sentinelgo.agent
+
+# Check for errors in logs
+tail -f /var/log/sentinelgo.err
+
+# Check plist file permissions
+ls -la /Library/LaunchDaemons/com.sentinelgo.agent.plist
+```
+
+### Permission Issues
+Ensure the binary has proper permissions:
+```bash
+sudo chmod +x /opt/sentinelgo/sentinelgo
+sudo chown root:wheel /opt/sentinelgo/sentinelgo
+```
+
+### Binary Not Found
+Make sure the binary path in the plist matches your installation:
+```bash
+# Verify binary exists
+ls -la /opt/sentinelgo/sentinelgo
+
+# Update plist if binary is in different location
+sudo nano /Library/LaunchDaemons/com.sentinelgo.agent.plist
 ```
 
 ## Notes
-- Supabase connection is configured via environment variables in `/opt/sentinelgo/.env`.
-- The agent checks for updates once every 24 hours.
-- Heartbeat is sent every 5 minutes (configurable).
-- Runs as root (launchd daemon) to collect full system metrics.
+- The agent runs as a system daemon (root) to collect full system metrics
+- Heartbeat is sent every 5 minutes (configurable)
+- Updates are checked once every 24 hours
+- Service automatically starts on system boot
+- All service management is handled through the SentinelGo binary commands
+- Cross-platform compatible: same commands work on Linux, Windows, and macOS

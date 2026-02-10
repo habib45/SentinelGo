@@ -216,35 +216,132 @@ func showSentinelGoStatus() error {
 
 	if len(processes) == 0 {
 		fmt.Println("No running SentinelGo processes found")
-		return nil
-	}
-
-	fmt.Printf("Found %d running SentinelGo process(es):\n\n", len(processes))
-	for i, proc := range processes {
-		fmt.Printf("Process %d:\n", i+1)
-		fmt.Printf("  PID:     %d\n", proc.PID)
-		fmt.Printf("  Version: %s\n", proc.Version)
-		fmt.Printf("  Status:  %s\n", proc.Status)
-		fmt.Printf("  Command: %s\n", proc.CmdLine)
-		fmt.Println()
+	} else {
+		fmt.Printf("Found %d running SentinelGo process(es):\n\n", len(processes))
+		for i, proc := range processes {
+			fmt.Printf("Process %d:\n", i+1)
+			fmt.Printf("  PID:     %d\n", proc.PID)
+			fmt.Printf("  Version: %s\n", proc.Version)
+			fmt.Printf("  Status:  %s\n", proc.Status)
+			fmt.Printf("  Command: %s\n", proc.CmdLine)
+			fmt.Println()
+		}
 	}
 
 	// Check for multiple versions
-	versions := make(map[string]int)
-	for _, proc := range processes {
-		versions[proc.Version]++
-	}
-
-	if len(versions) > 1 {
-		fmt.Println("WARNING: Multiple versions are running!")
-		for version, count := range versions {
-			fmt.Printf("  Version %s: %d process(es)\n", version, count)
+	if len(processes) > 0 {
+		versions := make(map[string]int)
+		for _, proc := range processes {
+			versions[proc.Version]++
 		}
-		fmt.Println("Consider stopping old versions before running the new one.")
-	} else {
-		fmt.Println("All processes are running the same version.")
+
+		if len(versions) > 1 {
+			fmt.Println("WARNING: Multiple versions are running!")
+			for version, count := range versions {
+				fmt.Printf("  Version %s: %d process(es)\n", version, count)
+			}
+			fmt.Println("Consider stopping old versions before running the new one.")
+		} else {
+			fmt.Println("All processes are running the same version.")
+		}
 	}
 
+	// Check launchd service status on macOS
+	if runtime.GOOS == "darwin" {
+		fmt.Println("\n" + strings.Repeat("=", 50))
+		fmt.Println("macOS launchd Service Status:")
+		fmt.Println(strings.Repeat("=", 50))
+		if err := checkLaunchdService(); err != nil {
+			fmt.Printf("Failed to check launchd service: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+// macOS specific launchd service management
+func createLaunchdPlist() error {
+	plistContent := `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.sentinelgo.agent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/sentinelgo/sentinelgo</string>
+    <string>-run</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/var/log/sentinelgo.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/sentinelgo.err</string>
+  <key>WorkingDirectory</key>
+  <string>/opt/sentinelgo</string>
+</dict>
+</plist>`
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll("/Library/LaunchDaemons", 0755); err != nil {
+		return fmt.Errorf("create LaunchDaemons directory: %w", err)
+	}
+
+	// Write the plist file
+	if err := os.WriteFile("/Library/LaunchDaemons/com.sentinelgo.agent.plist", []byte(plistContent), 0644); err != nil {
+		return fmt.Errorf("write plist file: %w", err)
+	}
+
+	fmt.Println("Created launchd plist: /Library/LaunchDaemons/com.sentinelgo.agent.plist")
+	return nil
+}
+
+func loadLaunchdService() error {
+	cmd := exec.Command("launchctl", "load", "-w", "/Library/LaunchDaemons/com.sentinelgo.agent.plist")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("load launchd service: %w", err)
+	}
+	fmt.Println("Loaded launchd service: com.sentinelgo.agent")
+	return nil
+}
+
+func startLaunchdService() error {
+	cmd := exec.Command("launchctl", "start", "com.sentinelgo.agent")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("start launchd service: %w", err)
+	}
+	fmt.Println("Started launchd service: com.sentinelgo.agent")
+	return nil
+}
+
+func unloadLaunchdService() error {
+	cmd := exec.Command("launchctl", "unload", "-w", "/Library/LaunchDaemons/com.sentinelgo.agent.plist")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("unload launchd service: %w", err)
+	}
+	fmt.Println("Unloaded launchd service: com.sentinelgo.agent")
+	return nil
+}
+
+func removeLaunchdPlist() error {
+	if err := os.Remove("/Library/LaunchDaemons/com.sentinelgo.agent.plist"); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove plist file: %w", err)
+	}
+	fmt.Println("Removed launchd plist: /Library/LaunchDaemons/com.sentinelgo.agent.plist")
+	return nil
+}
+
+func checkLaunchdService() error {
+	cmd := exec.Command("launchctl", "list", "com.sentinelgo.agent")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Service not found or not running: %s\n", strings.TrimSpace(string(output)))
+		return nil
+	}
+	fmt.Printf("Launchd service status:\n%s\n", string(output))
 	return nil
 }
 
@@ -315,18 +412,61 @@ func main() {
 	}
 
 	if *install {
-		if err := svc.Install(); err != nil {
-			log.Fatalf("Failed to install service: %v", err)
+		if runtime.GOOS == "darwin" {
+			// macOS: Use launchd
+			fmt.Println("Installing SentinelGo as launchd service...")
+
+			// Create launchd plist
+			if err := createLaunchdPlist(); err != nil {
+				log.Fatalf("Failed to create launchd plist: %v", err)
+			}
+
+			// Load the service
+			if err := loadLaunchdService(); err != nil {
+				log.Fatalf("Failed to load launchd service: %v", err)
+			}
+
+			// Start the service
+			if err := startLaunchdService(); err != nil {
+				log.Fatalf("Failed to start launchd service: %v", err)
+			}
+
+			fmt.Println("SentinelGo service installed and started successfully!")
+			fmt.Println("Service will start automatically on system boot.")
+			fmt.Println("Logs: /var/log/sentinelgo.log and /var/log/sentinelgo.err")
+		} else {
+			// Linux/Windows: Use kardianos/service
+			if err := svc.Install(); err != nil {
+				log.Fatalf("Failed to install service: %v", err)
+			}
+			logger.Info("Service installed")
 		}
-		logger.Info("Service installed")
 		return
 	}
 
 	if *uninstall {
-		if err := svc.Uninstall(); err != nil {
-			log.Fatalf("Failed to uninstall service: %v", err)
+		if runtime.GOOS == "darwin" {
+			// macOS: Use launchd
+			fmt.Println("Uninstalling SentinelGo launchd service...")
+
+			// Stop and unload the service
+			if err := unloadLaunchdService(); err != nil {
+				log.Printf("Warning: Failed to unload launchd service: %v", err)
+			}
+
+			// Remove the plist file
+			if err := removeLaunchdPlist(); err != nil {
+				log.Fatalf("Failed to remove launchd plist: %v", err)
+			}
+
+			fmt.Println("SentinelGo service uninstalled successfully!")
+		} else {
+			// Linux/Windows: Use kardianos/service
+			if err := svc.Uninstall(); err != nil {
+				log.Fatalf("Failed to uninstall service: %v", err)
+			}
+			logger.Info("Service uninstalled")
 		}
-		logger.Info("Service uninstalled")
 		return
 	}
 
