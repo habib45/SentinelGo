@@ -239,15 +239,43 @@ func startLaunchdService() error {
 
 	fmt.Println("Starting launchd service...")
 
-	// Load and start the service
-	cmd := exec.Command("launchctl", "load", "-w", "/Library/LaunchDaemons/com.sentinelgo.agent.plist")
-	if err := cmd.Run(); err != nil {
+	// Check if plist file exists
+	plistPath := "/Library/LaunchDaemons/com.sentinelgo.agent.plist"
+	if _, err := os.Stat(plistPath); os.IsNotExist(err) {
+		fmt.Printf("Launchd plist not found at %s\n", plistPath)
+		return fmt.Errorf("launchd plist file not found - service may not be installed")
+	}
+
+	// Load the service
+	cmd := exec.Command("launchctl", "load", "-w", plistPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Failed to load launchd service: %v\n", err)
+		fmt.Printf("Output: %s\n", string(output))
 		return fmt.Errorf("failed to load launchd service: %w", err)
 	}
 
+	// Wait a moment before starting
+	time.Sleep(500 * time.Millisecond)
+
+	// Start the service
 	cmd = exec.Command("launchctl", "start", "com.sentinelgo.agent")
-	if err := cmd.Run(); err != nil {
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Failed to start launchd service: %v\n", err)
+		fmt.Printf("Output: %s\n", string(output))
 		return fmt.Errorf("failed to start launchd service: %w", err)
+	}
+
+	// Wait and verify service is running
+	time.Sleep(1 * time.Second)
+	cmd = exec.Command("launchctl", "list", "com.sentinelgo.agent")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: Could not verify launchd service status: %v\n", err)
+	} else {
+		if strings.Contains(string(output), "com.sentinelgo.agent") {
+			fmt.Println("Launchd service started successfully")
+		} else {
+			fmt.Printf("Warning: Launchd service may not be running properly. Output: %s\n", string(output))
+		}
 	}
 
 	return nil
@@ -368,9 +396,15 @@ func restart(newPath string) error {
 		// Start launchd service with new binary
 		if err := startLaunchdService(); err != nil {
 			fmt.Printf("Warning: Failed to start launchd service: %v\n", err)
+			fmt.Println("Falling back to direct execution...")
+
 			// Fallback to direct execution
 			cmd := exec.Command(selfPath, "-run")
-			return cmd.Start()
+			if err := cmd.Start(); err != nil {
+				return fmt.Errorf("failed to start fallback execution: %w", err)
+			}
+			fmt.Println("Started SentinelGo in direct execution mode")
+			return nil
 		}
 
 		fmt.Println("Successfully updated and restarted launchd service")
