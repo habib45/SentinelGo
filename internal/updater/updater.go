@@ -57,13 +57,32 @@ func CheckAndApply(ctx context.Context, cfg *config.Config) error {
 		fmt.Printf("Warning: Failed to stop some old processes: %v\n", err)
 	}
 
-	// Give processes time to stop
-	time.Sleep(2 * time.Second)
+	// Give processes more time to fully stop
+	fmt.Println("Waiting for old processes to fully terminate...")
+	time.Sleep(5 * time.Second)
+
+	// Double-check no old processes remain
+	processes, _ := findOldProcesses()
+	if len(processes) > 0 {
+		fmt.Printf("Warning: %d old process(es) still running, proceeding anyway...\n", len(processes))
+		for _, proc := range processes {
+			fmt.Printf("  PID: %d, Version: %s\n", proc.PID, proc.Version)
+		}
+	} else {
+		fmt.Println("All old processes stopped successfully")
+	}
 
 	newPath, err := downloadAndReplace(ctx, assetURL, latest.TagName)
 	if err != nil {
 		return fmt.Errorf("download and replace: %w", err)
 	}
+
+	// Verify binary replacement was successful
+	if _, err := os.Stat(newPath); os.IsNotExist(err) {
+		return fmt.Errorf("new binary not found after replacement: %w", err)
+	}
+
+	fmt.Printf("Successfully updated to version %s\n", latest.TagName)
 
 	// Update config version
 	cfg.CurrentVersion = latest.TagName
@@ -150,6 +169,18 @@ func extractVersionFromCmd(cmdLine string) string {
 		if len(parts) > 1 {
 			version := strings.Split(parts[1], " ")[0]
 			return strings.Trim(version, `"`)
+		}
+	}
+	return "unknown"
+}
+
+// extractVersionFromPath extracts version from executable path
+func extractVersionFromPath(path string) string {
+	// Extract version from filename like "sentinelgo-v1.8.4"
+	parts := strings.Split(path, "-")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if strings.HasPrefix(parts[i], "v") {
+			return strings.Trim(parts[i], `"`)
 		}
 	}
 	return "unknown"
@@ -386,18 +417,24 @@ func restart(newPath string) error {
 		}
 
 		// Give service time to stop
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 
 		// Replace current binary with new one
 		if err := os.Rename(newPath, selfPath); err != nil {
 			return fmt.Errorf("failed to replace binary: %w", err)
 		}
 
+		// Verify binary replacement was successful
+		if _, err := os.Stat(newPath); os.IsNotExist(err) {
+			return fmt.Errorf("new binary not found after replacement: %w", err)
+		}
+
+		fmt.Printf("Successfully updated to version %s\n", extractVersionFromPath(newPath))
+
 		// Start launchd service with new binary
 		if err := startLaunchdService(); err != nil {
 			fmt.Printf("Warning: Failed to start launchd service: %v\n", err)
 			fmt.Println("Falling back to direct execution...")
-
 			// Fallback to direct execution
 			cmd := exec.Command(selfPath, "-run")
 			if err := cmd.Start(); err != nil {
@@ -407,7 +444,32 @@ func restart(newPath string) error {
 			return nil
 		}
 
-		fmt.Println("Successfully updated and restarted launchd service")
+		// Final verification - ensure only new version is running
+		time.Sleep(2 * time.Second)
+		fmt.Println("Verifying only new version is running...")
+
+		// Check for any remaining old processes
+		finalCheck, _ := findOldProcesses()
+		if len(finalCheck) > 0 {
+			fmt.Printf("Warning: Found %d old process(es) still running after update:\n", len(finalCheck))
+			for _, proc := range finalCheck {
+				fmt.Printf("  PID: %d, Version: %s\n", proc.PID, proc.Version)
+			}
+			fmt.Println("Force stopping remaining old processes...")
+			for _, proc := range finalCheck {
+				var cmd *exec.Cmd
+				switch runtime.GOOS {
+				case "windows":
+					cmd = exec.Command("taskkill", "/F", "/PID", strconv.Itoa(proc.PID))
+				case "linux", "darwin":
+					cmd = exec.Command("kill", "-KILL", strconv.Itoa(proc.PID))
+				}
+				cmd.Run()
+			}
+		} else {
+			fmt.Println("Success: Only new version is running")
+		}
+
 		return nil
 	}
 

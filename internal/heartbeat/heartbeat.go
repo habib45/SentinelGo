@@ -35,7 +35,7 @@ func Send(ctx context.Context, cfg *config.Config, sysInfo *osinfo.SystemInfo) e
 
 	payload := Payload{
 		DeviceID:        cfg.DeviceID,
-		Alive:           "false",
+		Alive:           "true",
 		BSID:            sysInfo.EmployeeId,
 		OS:              sysInfo.OS,
 		Uptime:          sysInfo.Uptime,
