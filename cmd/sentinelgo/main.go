@@ -16,6 +16,7 @@ import (
 
 	"sentinelgo/internal/config"
 	"sentinelgo/internal/heartbeat"
+	"sentinelgo/internal/lockfile"
 	"sentinelgo/internal/osinfo"
 	"sentinelgo/internal/updater"
 
@@ -32,17 +33,54 @@ var (
 )
 
 type program struct {
-	cfg *config.Config
+	cfg      *config.Config
+	lockFile *lockfile.LockFile
 }
 
 func (p *program) Start(s service.Service) error {
 	logger.Info("Starting SentinelGo service")
+
+	// Acquire process lock to prevent multiple instances
+	version := getCurrentVersion()
+	p.lockFile = lockfile.NewLockFile(fmt.Sprintf("sentinelgo-%s", version))
+
+	// Check for existing lock
+	locked, err := p.lockFile.CheckExistingLock()
+	if err != nil {
+		logger.Errorf("Failed to check existing lock: %v", err)
+		return err
+	}
+	if locked {
+		errMsg := fmt.Sprintf("Another instance of SentinelGo v%s is already running", version)
+		logger.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	// Try to acquire lock
+	if err := p.lockFile.TryAcquire(); err != nil {
+		errMsg := fmt.Sprintf("Failed to acquire process lock: %v", err)
+		logger.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	logger.Infof("Acquired process lock for SentinelGo v%s", version)
+
 	go p.run()
 	return nil
 }
 
 func (p *program) Stop(s service.Service) error {
 	logger.Info("Stopping SentinelGo service")
+
+	// Release process lock
+	if p.lockFile != nil {
+		if err := p.lockFile.Release(); err != nil {
+			logger.Errorf("Failed to release process lock: %v", err)
+		} else {
+			logger.Info("Released process lock")
+		}
+	}
+
 	return nil
 }
 
@@ -417,6 +455,16 @@ func checkLaunchdService() error {
 	return nil
 }
 
+// getCurrentVersion returns the current version of the running process
+func getCurrentVersion() string {
+	// Try to get version from config or use build version
+	cfg, err := config.Load("")
+	if err == nil && cfg.CurrentVersion != "" {
+		return cfg.CurrentVersion
+	}
+	return Version
+}
+
 func main() {
 	cfgPath := flag.String("config", "", "Path to config file (optional)")
 	install := flag.Bool("install", false, "Install service")
@@ -552,6 +600,33 @@ func main() {
 
 	if *run {
 		// Run in console/foreground mode
+		// Acquire process lock to prevent multiple instances
+		version := getCurrentVersion()
+		lockFile := lockfile.NewLockFile(fmt.Sprintf("sentinelgo-%s", version))
+
+		// Check for existing lock
+		locked, err := lockFile.CheckExistingLock()
+		if err != nil {
+			log.Printf("Warning: Failed to check existing lock: %v", err)
+		} else if locked {
+			log.Printf("Another instance of SentinelGo v%s is already running", version)
+			fmt.Printf("Error: Another instance of SentinelGo v%s is already running\n", version)
+			fmt.Println("Use './sentinelgo -stop' to stop the running instance first")
+			return
+		}
+
+		// Try to acquire lock
+		if err := lockFile.TryAcquire(); err != nil {
+			log.Printf("Failed to acquire process lock: %v", err)
+			fmt.Printf("Error: Failed to acquire process lock: %v\n", err)
+			return
+		}
+		defer lockFile.Release()
+
+		fmt.Printf("Started SentinelGo v%s in foreground mode\n", version)
+
+		// Set lockFile in program struct for proper cleanup
+		prg.lockFile = lockFile
 		prg.run()
 		return
 	}
