@@ -1,231 +1,197 @@
 # SentinelGo – Windows Installation Guide
 
-## Prerequisites
-- Windows 10/11 or Windows Server 2016+
-- Administrator privileges
-- PowerShell 5.1+ (built‑in)
+## What You Need
+- Windows 10 or Windows 11 computer
+- Administrator access to your computer
+- PowerShell (comes with Windows)
 
-## 1. Download the Binary
-Download the latest Windows binary from GitHub Releases:
-```
-https://github.com/habib45/SentinelGo/releases/latest
-```
-Choose the file named `sentinelgo-windows-amd64.exe`.
+## Step 1: Download SentinelGo
+1. Go to this website: https://github.com/habib45/SentinelGo/releases/latest
+2. Download the file named: `sentinelgo-windows-amd64.exe`
+3. Save it to your Downloads folder
 
-## 2. Create a Directory
-```powershell
-mkdir C:\ProgramFiles\SentinelGo
-```
+## Step 2: Create SentinelGo Folder
+1. Open PowerShell as Administrator:
+   - Click Start button
+   - Type "PowerShell"
+   - Right-click "Windows PowerShell"
+   - Select "Run as administrator"
+2. Type this command and press Enter:
+   ```powershell
+   mkdir C:\ProgramFiles\SentinelGo
+   ```
 
-## 3. Copy the Binary
-```powershell
-Copy-Item -Path .\sentinelgo-windows-amd64.exe -Destination C:\ProgramFiles\SentinelGo\sentinelgo.exe
-```
+## Step 3: Copy SentinelGo to Folder
+1. In PowerShell, go to your Downloads folder:
+   ```powershell
+   cd Downloads
+   ```
+2. Copy the file:
+   ```powershell
+   Copy-Item .\sentinelgo-windows-amd64.exe C:\ProgramFiles\SentinelGo\sentinelgo.exe
+   ```
 
-## 4. (Optional) Create a Configuration File
-Create configuration directory and file:
-```powershell
-mkdir C:\ProgramData\sentinelgo
-```
+## Step 4: Create Settings File (Optional)
+1. Create settings folder:
+   ```powershell
+   mkdir C:\ProgramData\sentinelgo
+   ```
+2. Create settings file:
+   ```powershell
+   notepad C:\ProgramData\sentinelgo\config.json
+   ```
+3. Copy and paste this text into Notepad:
+   ```json
+   {
+     "device_id": "my-computer-001",
+     "heartbeat_interval": "5m",
+     "github_owner": "habib45",
+     "github_repo": "SentinelGo",
+     "current_version": "v1.8.4"
+   }
+   ```
+4. Save the file and close Notepad
 
-Create `C:\ProgramData\sentinelgo\config.json`:
-```json
-{
-  "device_id": "windows-pc-001",
-  "heartbeat_interval": "5m",
-  "github_owner": "habib45",
-  "github_repo": "SentinelGo",
-  "current_version": "v1.8.4"
-}
-```
+## Step 5: Install SentinelGo as a Service
+1. In PowerShell, go to SentinelGo folder:
+   ```powershell
+   cd C:\ProgramFiles\SentinelGo
+   ```
+2. Install the service:
+   ```powershell
+   .\sentinelgo.exe -install
+   ```
 
-## 5. Install as a Windows Service (Recommended)
-Run PowerShell as Administrator:
+## Step 6: Start SentinelGo
+1. Start the service:
+   ```powershell
+   Start-Service SentinelGo
+   ```
+2. Check if it's running:
+   ```powershell
+   Get-Service SentinelGo
+   ```
+   You should see "Status: Running"
+
+## What SentinelGo Does Now
+- ✅ Automatically starts when your computer turns on
+- ✅ Sends computer health information every 5 minutes
+- ✅ Updates itself automatically
+- ✅ Runs silently in the background
+
+## Quick Commands You Can Use
+
+### Check SentinelGo Status
 ```powershell
 cd C:\ProgramFiles\SentinelGo
-.\sentinelgo.exe -install
-```
-
-This will automatically:
-- Install SentinelGo as a Windows service named "SentinelGo"
-- Configure the service to start automatically on system boot
-- Set up proper logging to Windows Event Viewer
-- Configure automatic updates
-
-## 6. Start the Service
-```powershell
-Start-Service SentinelGo
-```
-
-## 7. Verify Installation
-```powershell
-# Check service status
-Get-Service SentinelGo
-
-# Check version
-.\sentinelgo.exe -version
-
-# Check running processes
 .\sentinelgo.exe -status
 ```
 
-Status should be **Running**.
-
-## 8. Service Management Commands
-
-### View Service Status
+### Stop SentinelGo
 ```powershell
-.\sentinelgo.exe -status
-```
-Shows all running SentinelGo processes with versions.
-
-### Stop All Processes
-```powershell
+cd C:\ProgramFiles\SentinelGo
 .\sentinelgo.exe -stop
 ```
-Safely stops all running SentinelGo processes.
-
-### Run in Foreground (for testing)
-```powershell
-.\sentinelgo.exe -run
-```
-Runs the agent in console mode (not as service).
 
 ### Check Version
 ```powershell
+cd C:\ProgramFiles\SentinelGo
 .\sentinelgo.exe -version
 ```
-Shows current build version and platform info.
 
-## 9. Automatic Updates
-SentinelGo now includes intelligent automatic update management:
-
-- **Daily Update Checks**: Automatically checks for new versions every 24 hours
-- **Safe Process Management**: Stops old processes before applying updates
-- **Seamless Restart**: Automatically restarts with new version
-- **Version Tracking**: Identifies which version each process is running
-- **Fallback Protection**: Continues running if update fails
-
-### Manual Update Check
+### Test SentinelGo (Not as Service)
 ```powershell
-# Force update check (requires internet)
-.\sentinelgo.exe -run
-# The updater runs automatically in the background
-```
-
-## 10. Uninstall (if needed)
-```powershell
-Stop-Service SentinelGo
-.\sentinelgo.exe -uninstall
-```
-
-## 11. Troubleshooting
-
-### Check Windows Event Logs
-Windows Event Viewer → Windows Logs → Application → Source "SentinelGo"
-
-### Common Issues
-
-#### Service Won't Start
-```powershell
-# Check permissions
-Get-Acl C:\ProgramFiles\SentinelGo\sentinelgo.exe
-
-# Test manually
+cd C:\ProgramFiles\SentinelGo
 .\sentinelgo.exe -run
 ```
 
-#### Multiple Versions Running
-```powershell
-# Check for conflicts
-.\sentinelgo.exe -status
+## Common Problems and Easy Fixes
 
-# Stop all old versions
-.\sentinelgo.exe -stop
+### Problem: "Access is denied"
+**What it means:** You need administrator rights
 
-# Restart service
-Stop-Service SentinelGo
-Start-Service SentinelGo
-```
+**Easy Fix:**
+1. Close PowerShell
+2. Right-click PowerShell icon
+3. Select "Run as administrator"
+4. Try the command again
 
-#### Update Issues
-```powershell
-# Stop all processes
-.\sentinelgo.exe -stop
+### Problem: "Cannot start service"
+**What it means:** SentinelGo can't start properly
 
-# Download latest version manually
-# Replace binary in C:\ProgramFiles\SentinelGo\
+**Easy Fix:**
+1. Test if SentinelGo works:
+   ```powershell
+   cd C:\ProgramFiles\SentinelGo
+   .\sentinelgo.exe -run
+   ```
+2. If it works, reinstall:
+   ```powershell
+   .\sentinelgo.exe -uninstall
+   .\sentinelgo.exe -install
+   Start-Service SentinelGo
+   ```
 
-# Restart service
-Start-Service SentinelGo
-```
+### Problem: "Application Control policy blocked"
+**What it means:** Windows is blocking the program for security
 
-## 12. Heartbeat Data
-SentinelGo sends the following data to your Supabase database:
+**Easy Fix:**
+1. Open Windows Security (search in Start menu)
+2. Go to "App & Browser Control"
+3. Click "Exploit protection settings"
+4. Click "Controlled folder access"
+5. Click "Allow an app through Controlled folder access"
+6. Click "Add an allowed app" → "Recently blocked apps"
+7. Find and select `sentinelgo.exe`
+8. Click "Add"
+9. Try the command again
 
-```json
-{
-  "device_id": "windows-pc-001",
-  "alive": "true",
-  "employee_id": "WINDOWS-PC",
-  "os": "windows",
-  "uptime": 86400,
-  "uptime_formatted": "1 day 0 hours 0 minutes",
-  "timestamp": "2024-02-10T17:30:00Z",
-  "hostname": "WINDOWS-PC",
-  "platform": "Microsoft Windows 10 Pro",
-  "platform_version": "10.0.19045",
-  "arch": "amd64",
-  "cpu": {
-    "model_name": "Intel(R) Core(TM) i7-9700K",
-    "cores": 8,
-    "usage": 15.5
-  },
-  "memory": {
-    "total": 17179869184,
-    "used": 8589934592,
-    "free": 8589934592,
-    "usage": 50.0
-  },
-  "disk": {
-    "total": 107374182400,
-    "used": 53687091200,
-    "free": 53687091200
-  },
-  "network": [
-    {
-      "name": "Ethernet",
-      "bytes_sent": 1048576000,
-      "bytes_recv": 2097152000
-    }
-  ]
-}
-```
+### Problem: Service won't start after restart
+**What it means:** Settings file is missing
 
-## Key Features
+**Easy Fix:**
+1. Create settings file (see Step 4)
+2. Restart the service:
+   ```powershell
+   Stop-Service SentinelGo
+   Start-Service SentinelGo
+   ```
 
-### New in This Version
-- **Automatic Updates**: Safe, intelligent update management
-- **Version Tracking**: Clear identification of running versions
-- **Process Management**: Safe stopping of old processes
-- **Enhanced Logging**: Better error reporting and diagnostics
-- **Uptime Formatting**: Human-readable uptime display
-- **Cross-Platform**: Consistent behavior across Windows, Linux, and macOS
+## How to Uninstall SentinelGo
+1. Stop the service:
+   ```powershell
+   Stop-Service SentinelGo
+   ```
+2. Remove the service:
+   ```powershell
+   cd C:\ProgramFiles\SentinelGo
+   .\sentinelgo.exe -uninstall
+   ```
+3. Delete the folder:
+   ```powershell
+   Remove-Item C:\ProgramFiles\SentinelGo -Recurse -Force
+   ```
 
-### Configuration Options
-- **Device ID**: Unique identifier for the machine
-- **Heartbeat Interval**: How often to send data (default: 5m)
-- **Update Frequency**: How often to check for updates (default: 24h)
-- **GitHub Repository**: Where to download updates from
+## What Information SentinelGo Sends
+SentinelGo sends this information to your dashboard:
+- Computer name and ID
+- Operating system (Windows)
+- How long computer has been running
+- CPU, memory, and disk usage
+- Network information
 
-### Monitoring Capabilities
-- **System Uptime**: Both raw seconds and formatted string
-- **Resource Usage**: CPU, memory, disk, and network statistics
-- **Service Health**: Automatic restart on failures
-- **Update Status**: Track update success/failure
+**Your data is secure and only sent to your own dashboard.**
 
-## Security Notes
-- The service runs under the LocalSystem account
-- All network communications use HTTPS
-- Configuration files should be protected with appropriate permissions
-- Supabase credentials are stored in configuration files (not environment variables)
+## Need Help?
+If you have any problems:
+1. Check the "Common Problems" section above
+2. Make sure you're running PowerShell as administrator
+3. Contact your IT support person
+
+## Summary
+After following these steps:
+- ✅ SentinelGo is installed on your computer
+- ✅ It starts automatically when computer turns on
+- ✅ It sends regular health updates
+- ✅ It updates itself automatically
+- ✅ You can control it with simple commands
