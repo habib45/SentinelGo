@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -25,7 +26,7 @@ func NewLockFile(name string) *LockFile {
 	}
 	lockDir := filepath.Join(home, ".sentinelgo")
 	os.MkdirAll(lockDir, 0755)
-	
+
 	return &LockFile{
 		path: filepath.Join(lockDir, name+".lock"),
 	}
@@ -33,32 +34,33 @@ func NewLockFile(name string) *LockFile {
 
 // TryAcquire attempts to acquire the lock
 func (lf *LockFile) TryAcquire() error {
-	// Try to create/open the lock file
-	file, err := os.OpenFile(lf.path, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return fmt.Errorf("open lock file: %w", err)
-	}
-	lf.file = file
-
-	// Try to acquire exclusive lock using syscall
-	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-	if err != nil {
-		file.Close()
-		lf.file = nil
-		if err == syscall.EWOULDBLOCK {
-			// Lock is held by another process
+	// Check if lock file already exists
+	if _, err := os.Stat(lf.path); err == nil {
+		// Lock file exists, check if process is still running
+		if lf.isProcessRunning() {
 			return fmt.Errorf("lock already held by another process")
 		}
-		return fmt.Errorf("flock failed: %w", err)
+		// Process is not running, remove stale lock file
+		os.Remove(lf.path)
 	}
+
+	// Try to create lock file with exclusive access
+	file, err := os.OpenFile(lf.path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0644)
+	if err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("lock already held by another process")
+		}
+		return fmt.Errorf("failed to create lock file: %w", err)
+	}
+	lf.file = file
 
 	// Write our PID to the lock file
 	pid := os.Getpid()
 	_, err = file.WriteString(strconv.Itoa(pid) + "\n")
 	if err != nil {
-		syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
 		file.Close()
 		lf.file = nil
+		os.Remove(lf.path)
 		return fmt.Errorf("write PID: %w", err)
 	}
 
@@ -94,12 +96,6 @@ func (lf *LockFile) Release() error {
 	// Remove the lock file
 	os.Remove(lf.path)
 
-	// Release the flock
-	err := syscall.Flock(int(lf.file.Fd()), syscall.LOCK_UN)
-	if err != nil {
-		return fmt.Errorf("unlock failed: %w", err)
-	}
-
 	// Close the file
 	lf.file.Close()
 	lf.file = nil
@@ -131,9 +127,32 @@ func IsProcessRunning(pid int) bool {
 		return false
 	}
 
-	// Send signal 0 to check if process exists
+	if runtime.GOOS == "windows" {
+		// On Windows, we can't use Signal(0) the same way
+		// We'll check if the process exists by trying to signal it
+		return process.Signal(os.Kill) != nil // If we can't kill it, it might be running
+	}
+
+	// For Unix systems (Linux/macOS), use Signal(0) to check if process exists
+	// This is a non-lethal signal that just checks if the process is reachable
 	err = process.Signal(syscall.Signal(0))
 	return err == nil
+}
+
+// isProcessRunning checks if the process in the lock file is still running
+func (lf *LockFile) isProcessRunning() bool {
+	data, err := os.ReadFile(lf.path)
+	if err != nil {
+		return false
+	}
+
+	pidStr := strings.TrimSpace(string(data))
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		return false
+	}
+
+	return IsProcessRunning(pid)
 }
 
 // CheckExistingLock checks if there's an existing lock and if the process is still running
