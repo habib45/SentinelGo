@@ -325,6 +325,7 @@ func fetchLatestRelease(ctx context.Context, cfg *config.Config) (*GitHubRelease
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
