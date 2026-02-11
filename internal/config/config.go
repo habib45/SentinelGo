@@ -36,9 +36,13 @@ func Load(path string) (*Config, error) {
 		// Default location
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, err
+			// Fallback to /opt/sentinelgo for service environment
+			home = "/opt/sentinelgo"
 		}
-		cfg.Path = filepath.Join(home, ".sentinelgo", "config.json")
+		configDir := filepath.Join(home, ".sentinelgo")
+		// Ensure config directory exists
+		os.MkdirAll(configDir, 0755)
+		cfg.Path = filepath.Join(configDir, "config.json")
 	}
 
 	if _, err := os.Stat(cfg.Path); err == nil {
