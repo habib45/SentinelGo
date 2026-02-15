@@ -66,7 +66,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          CGO_ENABLED=0 go build -ldflags "-X sentinelgo/internal/config.Version=$VERSION" -o ${{ matrix.output }} ./cmd/sentinelgo
+          CGO_ENABLED=0 go build -ldflags "-X sentinelgo/cmd/sentinelgo.Version=$VERSION -X sentinelgo/internal/config.Version=$VERSION" -o ${{ matrix.output }} ./cmd/sentinelgo
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -95,42 +95,68 @@ jobs:
         with:
           path: artifacts
 
+      - name: Create release packages
+        run: |
+          mkdir -p release
+          cp install.sh INSTALLATION.md release/
+          
+          # Create individual packages
+          cd release
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-windows.tar.gz" "../artifacts/sentinelgo-windows-amd64.exe" install.sh INSTALLATION.md
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz" "../artifacts/sentinelgo-linux-amd64" install.sh INSTALLATION.md
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz" "../artifacts/sentinelgo-linux-arm64" install.sh INSTALLATION.md
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz" "../artifacts/sentinelgo-darwin-amd64" install.sh INSTALLATION.md
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz" "../artifacts/sentinelgo-darwin-arm64" install.sh INSTALLATION.md
+          
+          ls -la
+
       - name: Generate release notes
         id: release_notes
         run: |
+          cat > release_notes.md << 'EOF'
           # Get previous tag
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           
           if [ -n "$PREVIOUS_TAG" ]; then
             # Generate changelog since last tag
-            NOTES=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
+            echo "## Changelog"
+            git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD
           else
-            NOTES="Initial release"
+            echo "## Changelog"
+            echo "- Initial release"
           fi
           
-          # Add installation instructions
-          NOTES="$NOTES
-
-          ## Installation
-
-          ### Quick Start
-          1. Download the binary for your platform below
-          2. Follow the installation guide in the \`doc/\` folder:
-             - [Linux](doc/install-linux.md)
-             - [macOS](doc/install-macos.md)
-             - [Windows](doc/install-windows.md)
-
-          ### Environment Variables
-          Create a \`.env\` file with your credentials:
-          \`\`\`bash
-          SUPABASE_URL=https://your-project.supabase.co
-          SUPABASE_KEY=your-supabase-anon-key
-          API_TOKEN=your-api-token
-          \`\`\`
-          "
+          echo ""
+          echo "## 🚀 Installation"
+          echo ""
+          echo "### Quick Install (Recommended)"
+          echo "1. Download the package for your OS/architecture below"
+          echo "2. Extract the archive"
+          echo "3. Run: sudo ./install.sh"
+          echo "4. Enable auto-updates: sudo ./sentinelgo -enable-auto-update"
+          echo ""
+          echo "### Available Packages"
+          echo "- Linux AMD64: For standard Ubuntu/Debian/CentOS systems"
+          echo "- Linux ARM64: For ARM systems like Raspberry Pi"
+          echo "- macOS AMD64: For Intel Macs"
+          echo "- macOS ARM64: For Apple Silicon Macs (M1/M2)"
+          echo "- Windows: For Windows 10/11 systems"
+          echo ""
+          echo "### Features"
+          echo "- Automatic Updates - Keeps your agent current"
+          echo "- Duplicate Prevention - Only one instance runs"
+          echo "- Cross-Platform - Works on all major OS"
+          echo "- Service Integration - Auto-start on boot"
+          echo "- Easy Installation - One-command setup"
+          echo ""
+          echo "### Documentation"
+          echo "- See INSTALLATION.md for detailed instructions"
+          echo "- Use ./install.sh --help for command options"
+          echo "- Use ./install.sh status to check service status"
+          EOF
           
-          # Escape for JSON
-          NOTES=$(echo "$NOTES" | sed 's/"/\\"/g' | tr '\n' '\\n')
+          # Read the file and escape for JSON
+          NOTES=$(cat release_notes.md | sed 's/"/\\"/g' | tr '\n' '\\n')
           echo "notes=$NOTES" >> $GITHUB_OUTPUT
 
       - name: Create Release
@@ -140,12 +166,12 @@ jobs:
           name: SentinelGo ${{ steps.version.outputs.VERSION }}
           body: ${{ steps.release_notes.outputs.notes }}
           files: |
-            artifacts/sentinelgo-windows-amd64.exe
-            artifacts/sentinelgo-linux-amd64
-            artifacts/sentinelgo-linux-arm64
-            artifacts/sentinelgo-darwin-amd64
-            artifacts/sentinelgo-darwin-arm64
-          draft: false
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-windows.tar.gz
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz
+          draft: true
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -20,7 +20,8 @@ type Config struct {
 	GitHubOwner       string        `json:"github_owner"`
 	GitHubRepo        string        `json:"github_repo"`
 	CurrentVersion    string        `json:"current_version"`
-	DeviceID          string        `json:"device_id"` // persistent unique identifier
+	DeviceID          string        `json:"device_id"`   // persistent unique identifier
+	AutoUpdate        bool          `json:"auto_update"` // Enable automatic updates
 }
 
 func Load(path string) (*Config, error) {
@@ -30,6 +31,7 @@ func Load(path string) (*Config, error) {
 		GitHubOwner:       "habib45",
 		GitHubRepo:        "SentinelGo",
 		CurrentVersion:    Version, // Use injected version
+		AutoUpdate:        false,   // Disabled by default for safety
 	}
 
 	if path == "" {

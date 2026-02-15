@@ -88,6 +88,11 @@ func (p *program) run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Start auto-updater in background if enabled
+	if p.cfg.AutoUpdate {
+		go updater.AutoUpdateChecker(ctx, p.cfg)
+	}
+
 	ticker := time.NewTicker(p.cfg.HeartbeatInterval)
 	defer ticker.Stop()
 
@@ -445,13 +450,17 @@ func removeLaunchdPlist() error {
 }
 
 func checkLaunchdService() error {
-	cmd := exec.Command("launchctl", "list", "com.sentinelgo.agent")
+	cmd := exec.Command("sh", "-c", "launchctl list | grep sentinelgo")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("Service not found or not running: %s\n", strings.TrimSpace(string(output)))
+		fmt.Printf("Failed to check launchd service: %v\n", err)
 		return nil
 	}
-	fmt.Printf("Launchd service status:\n%s\n", string(output))
+	if len(strings.TrimSpace(string(output))) == 0 {
+		fmt.Println("No SentinelGo services found in launchctl")
+	} else {
+		fmt.Printf("Launchd service status:\n%s\n", string(output))
+	}
 	return nil
 }
 
@@ -472,6 +481,7 @@ func main() {
 	run := flag.Bool("run", false, "Run in foreground (console mode)")
 	status := flag.Bool("status", false, "Show running SentinelGo processes and versions")
 	stop := flag.Bool("stop", false, "Stop all running SentinelGo processes")
+	enableAutoUpdate := flag.Bool("enable-auto-update", false, "Enable automatic updates")
 	version := flag.Bool("version", false, "Show version information")
 	flag.Parse()
 
@@ -482,7 +492,34 @@ func main() {
 		return
 	}
 
-	cfg, err := config.Load(*cfgPath)
+	// Handle enable-auto-update flag
+	if *enableAutoUpdate {
+		// Enable auto-update in config
+		var cfg *config.Config
+		var err error
+		if len(*cfgPath) == 0 {
+			// Load default config
+			cfg, err = config.Load("")
+		} else {
+			// Load specified config
+			cfg, err = config.Load(*cfgPath)
+		}
+		if err != nil {
+			log.Fatalf("Failed to load config: %v", err)
+		}
+
+		// Enable auto-update
+		cfg.AutoUpdate = true
+		if err := cfg.Save(); err != nil {
+			log.Fatalf("Failed to save config: %v", err)
+		}
+		fmt.Println("Auto-update enabled in config")
+		return
+	}
+
+	var cfg *config.Config
+	var err error
+	cfg, err = config.Load(*cfgPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}

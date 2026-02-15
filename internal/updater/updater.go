@@ -615,3 +615,24 @@ del "%s"`, newPath, selfPath, selfPath, bat)
 		return cmd.Start()
 	}
 }
+
+// AutoUpdateChecker runs automatic updates in background
+func AutoUpdateChecker(ctx context.Context, cfg *config.Config) {
+	ticker := time.NewTicker(1 * time.Hour) // Check every hour
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			fmt.Println("Checking for updates...")
+
+			if err := CheckAndApply(ctx, cfg); err != nil {
+				fmt.Printf("Auto-update failed: %v\n", err)
+			} else {
+				fmt.Println("Auto-update completed successfully")
+			}
+		}
+	}
+}
