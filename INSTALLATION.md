@@ -107,6 +107,36 @@ tail -f /var/log/sentinelgo.log                                         # Logs
 ```
 
 ### Windows
+
+#### Option 1: Using Installation Script (Recommended)
+```cmd
+# Download the Windows binary from GitHub Releases
+# https://github.com/habib45/SentinelGo/releases/latest
+
+# Run as Administrator
+install.bat install
+```
+
+#### Option 2: Manual Installation
+```cmd
+# 1. Create directory
+mkdir C:\opt\sentinelgo
+
+# 2. Copy binary (choose your architecture)
+copy sentinelgo-windows-amd64.exe C:\opt\sentinelgo\sentinelgo.exe
+
+# 3. Create config directory
+mkdir C:\opt\sentinelgo\.sentinelgo
+
+# 4. Create config file
+echo {"heartbeat_interval":"5m","auto_update":false} > C:\opt\sentinelgo\.sentinelgo\config.json
+
+# 5. Install as service (Run as Administrator)
+sc.exe create sentinelgo binPath= "C:\opt\sentinelgo\sentinelgo.exe" -run
+sc.exe start sentinelgo
+```
+
+**Windows Service Management:**
 - Uses **Windows Service** for service management
 - Binary location: `C:\opt\sentinelgo\sentinelgo.exe`
 - Config location: `C:\opt\sentinelgo\.sentinelgo\`
@@ -118,6 +148,15 @@ sc.exe start sentinelgo          # Start
 sc.exe stop sentinelgo           # Stop
 sc.exe query sentinelgo          # Status
 sc.exe delete sentinelgo         # Delete service
+```
+
+#### Windows Script Commands:
+```cmd
+install.bat install        # Install service
+install.bat uninstall      # Remove service
+install.bat update         # Update binary
+install.bat status         # Show status
+install.bat help           # Show help
 ```
 
 ---
