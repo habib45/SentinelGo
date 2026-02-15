@@ -169,6 +169,8 @@ RestartSec=10
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=sentinelgo
+Environment=HOME=$INSTALL_DIR
+Environment=XDG_CONFIG_HOME=$CONFIG_DIR
 
 # Security settings
 NoNewPrivileges=true
@@ -176,6 +178,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=$INSTALL_DIR
+ReadWritePaths=$CONFIG_DIR
 
 [Install]
 WantedBy=multi-user.target
@@ -184,9 +187,30 @@ EOF
     chmod 644 "/etc/systemd/system/${SERVICE_NAME}.service"
     systemctl daemon-reload
     systemctl enable "$SERVICE_NAME"
-    systemctl start "$SERVICE_NAME"
     
-    print_success "Systemd service installed and started"
+    # Test service configuration
+    print_status "Testing service configuration..."
+    # Simple test - check if service file exists and has correct permissions
+    if [[ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]]; then
+        print_status "Service file exists and is properly configured"
+        systemctl start "$SERVICE_NAME"
+        
+        # Check status
+        sleep 3
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            print_success "Systemd service installed and started"
+            print_status "Current status:"
+            systemctl status "$SERVICE_NAME" --no-pager -l
+        else
+            print_error "Service failed to start - checking logs"
+            print_status "Recent logs:"
+            journalctl -u "$SERVICE_NAME" -n 10 --no-pager
+        fi
+    else
+        print_error "Service configuration test failed"
+        print_status "Reinstalling service..."
+        install_systemd_service
+    fi
 }
 
 # Install launchd service (macOS)
@@ -308,37 +332,169 @@ uninstall_service() {
 update_service() {
     print_status "Updating SentinelGo..."
     
-    # Stop service
+    check_permissions
+    
+    # Stop any running SentinelGo processes first
+    print_status "Stopping any running SentinelGo processes..."
     local os=$(detect_os)
     case "$os" in
         ubuntu|centos|fedora|linux)
-            systemctl stop "$SERVICE_NAME"
+            systemctl stop sentinelgo 2>/dev/null || true
             ;;
         macos)
-            launchctl stop "com.sentinelgo.agent"
+            launchctl stop com.sentinelgo.agent 2>/dev/null || true
             ;;
         windows)
-            sc.exe stop "$SERVICE_NAME"
+            sc.exe stop sentinelgo 2>/dev/null || true
             ;;
     esac
     
-    # Update binary
+    # Kill any remaining processes
+    pkill -f sentinelgo 2>/dev/null || true
+    sleep 2
+    
     setup_directories
     
-    # Start service
     case "$os" in
         ubuntu|centos|fedora|linux)
-            systemctl start "$SERVICE_NAME"
+            systemctl start sentinelgo
             ;;
         macos)
-            launchctl start "com.sentinelgo.agent"
+            launchctl start com.sentinelgo.agent
             ;;
         windows)
-            sc.exe start "$SERVICE_NAME"
+            sc.exe start sentinelgo
             ;;
     esac
     
-    print_success "SentinelGo updated successfully"
+    print_success "SentinelGo updated successfully!"
+}
+
+# Fix service startup issues
+fix_service() {
+    print_status "Fixing SentinelGo service issues..."
+    
+    check_permissions
+    
+    # Stop service first
+    print_status "Stopping service..."
+    local os=$(detect_os)
+    case "$os" in
+        ubuntu|centos|fedora|linux)
+            systemctl stop sentinelgo 2>/dev/null || true
+            systemctl disable sentinelgo 2>/dev/null || true
+            ;;
+        macos)
+            launchctl stop com.sentinelgo.agent 2>/dev/null || true
+            ;;
+        windows)
+            sc.exe stop sentinelgo 2>/dev/null || true
+            ;;
+    esac
+    
+    # Wait for complete stop
+    sleep 3
+    
+    # Kill any remaining processes
+    print_status "Killing remaining processes..."
+    pkill -f sentinelgo 2>/dev/null || true
+    sleep 2
+    
+    # Check and fix permissions
+    print_status "Fixing permissions..."
+    if [[ "$os" != "windows" ]]; then
+        chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+        chmod +x "$INSTALL_DIR/$BINARY_NAME"
+    fi
+    
+    # Check config
+    print_status "Checking config..."
+    if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
+        print_status "Creating default config..."
+        mkdir -p "$CONFIG_DIR"
+        echo '{"heartbeat_interval":"5m0s","auto_update":false}' > "$CONFIG_DIR/config.json"
+        if [[ "$os" != "windows" ]]; then
+            chown -R "$SERVICE_USER:$SERVICE_USER" "$CONFIG_DIR"
+        fi
+    fi
+    
+    # Test binary
+    print_status "Testing binary..."
+    if [[ "$os" != "windows" ]]; then
+        # Simple test - check if binary exists and is executable
+        if [[ -x "$INSTALL_DIR/$BINARY_NAME" ]]; then
+            print_status "Binary exists and is executable"
+            
+            # Restart service
+            print_status "Restarting service..."
+            case "$os" in
+                ubuntu|centos|fedora|linux)
+                    systemctl daemon-reload
+                    systemctl enable "$SERVICE_NAME"
+                    systemctl start "$SERVICE_NAME"
+                    ;;
+                macos)
+                    launchctl load "/Library/LaunchDaemons/com.sentinelgo.agent.plist"
+                    launchctl start "com.sentinelgo.agent"
+                    ;;
+            esac
+            
+            # Check status
+            sleep 3
+            case "$os" in
+                ubuntu|centos|fedora|linux)
+                    if systemctl is-active --quiet "$SERVICE_NAME"; then
+                        print_success "Service started successfully!"
+                        print_status "Current status:"
+                        systemctl status "$SERVICE_NAME" --no-pager -l
+                    else
+                        print_error "Service failed to start - checking logs"
+                        print_status "Recent logs:"
+                        journalctl -u "$SERVICE_NAME" -n 10 --no-pager
+                    fi
+                    ;;
+            esac
+        else
+            print_error "Binary not found or not executable"
+            print_status "Installing binary first..."
+            # Copy current binary if available
+            if [[ -f "./sentinelgo-linux-amd64" ]]; then
+                cp "./sentinelgo-linux-amd64" "$INSTALL_DIR/$BINARY_NAME"
+                chmod +x "$INSTALL_DIR/$BINARY_NAME"
+                chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/$BINARY_NAME"
+                print_status "Binary installed, trying again..."
+            elif [[ -f "./build/linux/sentinelgo-linux-amd64" ]]; then
+                cp "./build/linux/sentinelgo-linux-amd64" "$INSTALL_DIR/$BINARY_NAME"
+                chmod +x "$INSTALL_DIR/$BINARY_NAME"
+                chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/$BINARY_NAME"
+                print_status "Binary installed from build/, trying again..."
+            else
+                print_error "No binary found to install"
+                print_status "Please build the binary first: make"
+                return
+            fi
+            
+            # Try to start service again
+            case "$os" in
+                ubuntu|centos|fedora|linux)
+                    systemctl start "$SERVICE_NAME"
+                    ;;
+                macos)
+                    launchctl start "com.sentinelgo.agent"
+                    ;;
+            esac
+            
+            sleep 3
+            if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+                print_success "Service started successfully!"
+            else
+                print_error "Service still failed - manual intervention needed"
+                print_status "Check logs: journalctl -u $SERVICE_NAME -f"
+            fi
+        fi
+    fi
+    
+    print_success "Service fix completed!"
 }
 
 # Show help
@@ -352,6 +508,7 @@ show_help() {
     printf '%s\n' '  uninstall   Remove SentinelGo service and data'
     printf '%s\n' '  update      Update SentinelGo binary'
     printf '%s\n' '  status      Show service status'
+    printf '%s\n' '  fix-service Fix service startup issues'
     printf '%s\n' '  help        Show this help message'
     printf '%s\n' '  enable-auto-update        Enable automatic updates'
     printf '%s\n' ''
@@ -359,6 +516,52 @@ show_help() {
     printf '%s\n' '  sudo ./install.sh install'
     printf '%s\n' '  sudo ./install.sh uninstall'
     printf '%s\n' '  sudo ./install.sh status'
+    printf '%s\n' '  sudo ./install.sh fix-service'
+}
+
+# Install service
+install_service() {
+    print_status "Installing SentinelGo..."
+    
+    check_permissions
+    
+    # Stop any running SentinelGo processes first
+    print_status "Stopping any running SentinelGo processes..."
+    local os=$(detect_os)
+    case "$os" in
+        ubuntu|centos|fedora|linux)
+            systemctl stop sentinelgo 2>/dev/null || true
+            ;;
+        macos)
+            launchctl stop com.sentinelgo.agent 2>/dev/null || true
+            ;;
+        windows)
+            sc.exe stop sentinelgo 2>/dev/null || true
+            ;;
+    esac
+    
+    # Kill any remaining processes
+    pkill -f sentinelgo 2>/dev/null || true
+    sleep 2
+    
+    create_service_user
+    setup_directories
+    
+    case "$os" in
+        ubuntu|centos|fedora|linux)
+            install_systemd_service
+            ;;
+        macos)
+            install_launchd_service
+            ;;
+        windows)
+            install_windows_service
+            ;;
+    esac
+    
+    print_success "SentinelGo installed successfully!"
+    print_status "Use './install.sh status' to check service status"
+    print_status "Use './sentinelgo -enable-auto-update' to enable automatic updates"
 }
 
 # Main script logic
@@ -377,6 +580,9 @@ main() {
             ;;
         status)
             show_status
+            ;;
+        fix-service)
+            fix_service
             ;;
         help|--help|-h)
             show_help
