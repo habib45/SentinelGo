@@ -1,5 +1,19 @@
 # SentinelGo Installation Guide
 
+## Overview
+SentinelGo is a cross-platform monitoring agent that runs as a system service. This guide provides multiple installation methods for Linux, macOS, and Windows.
+
+## Quick Start
+
+### Choose Your Platform:
+- **[Linux](#linux)** - Ubuntu, Debian, CentOS, RHEL, etc.
+- **[macOS](#macos)** - Intel and Apple Silicon
+- **[Windows](#windows)** - Windows 10/11
+
+### Installation Methods:
+1. **Automated Scripts** - Recommended for most users
+2. **Manual Installation** - For advanced users and custom setups
+
 ## 🚀 Quick Installation (One Command)
 
 After downloading the release from GitHub, simply run:
@@ -10,6 +24,7 @@ sudo ./install.sh
 
 # For Windows (run as Administrator)
 ./install.sh
+
 ```
 
 That's it! SentinelGo will be installed and configured to start automatically on system boot.
@@ -103,7 +118,147 @@ sudo launchctl unload /Library/LaunchDaemons/com.sentinelgo.agent.plist  # Unloa
 sudo launchctl start com.sentinelgo.agent                               # Start
 sudo launchctl stop com.sentinelgo.agent                                # Stop
 launchctl list | grep sentinelgo                                        # Status
-tail -f /var/log/sentinelgo.log                                         # Logs
+tail -f /tmp/sentinelgo.log                                         # Logs
+```
+
+#### macOS Script Commands:
+```bash
+install-macos-simple.sh install        # Install service
+install-macos-simple.sh uninstall      # Remove service
+install-macos-reliable.sh install       # Install with fallback (recommended)
+install-macos-reliable.sh help         # Show help
+```
+
+## 🐧 Linux
+
+### Prerequisites
+- Linux (systemd-based distro: Ubuntu 18.04+, Debian 10+, CentOS 8+, RHEL 8+, etc.)
+- `sudo` or root access
+
+### Option 1: Using Installation Script (Recommended)
+```bash
+# Download Linux binary from GitHub Releases
+# https://github.com/habib45/SentinelGo/releases/latest
+
+# Run as root
+sudo ./install.sh install
+```
+
+### Option 2: Simple Linux Installation (Alternative)
+```bash
+# For systems with complex permission issues
+sudo ./install-linux-simple.sh
+```
+
+### Option 3: Manual Installation
+
+#### 1. Download the Binary
+Download the latest Linux binary from GitHub Releases:
+```
+https://github.com/habib45/SentinelGo/releases/latest
+```
+Choose file named `sentinelgo-linux-amd64` (or `-arm64` for ARM).
+
+#### 2. Create Directory and Copy Binary
+```bash
+sudo mkdir -p /opt/sentinelgo
+sudo cp sentinelgo-linux-amd64 /opt/sentinelgo/sentinelgo
+sudo chmod +x /opt/sentinelgo/sentinelgo
+```
+
+#### 3. Create Configuration
+```bash
+sudo mkdir -p /opt/sentinelgo/.sentinelgo
+echo '{"heartbeat_interval":"5m0s","auto_update":false}' | sudo tee /opt/sentinelgo/.sentinelgo/config.json
+```
+
+#### 4. Create systemd Service
+```bash
+sudo tee /etc/systemd/system/sentinelgo.service > /dev/null <<'EOF'
+[Unit]
+Description=SentinelGo Agent
+After=network.target
+
+[Service]
+Type=simple
+User=sentinelgo
+Group=sentinelgo
+WorkingDirectory=/opt/sentinelgo
+ExecStart=/opt/sentinelgo/sentinelgo -run
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sentinelgo
+Environment=HOME=/opt/sentinelgo
+Environment=XDG_CONFIG_HOME=/opt/sentinelgo/.sentinelgo
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+#### 5. Enable and Start Service
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable sentinelgo
+sudo systemctl start sentinelgo
+```
+
+#### 6. Verify Installation
+```bash
+sudo systemctl status sentinelgo
+```
+Should show `active (running)`.
+
+### Linux Script Commands:
+```bash
+install-linux-simple.sh install        # Install service
+install-linux-simple.sh uninstall      # Remove service
+install-linux-simple.sh help           # Show help
+```
+
+### Service Management:
+```bash
+sudo systemctl start sentinelgo         # Start
+sudo systemctl stop sentinelgo          # Stop
+sudo systemctl restart sentinelgo       # Restart
+sudo systemctl status sentinelgo        # Status
+sudo systemctl enable sentinelgo        # Enable on boot
+sudo systemctl disable sentinelgo       # Disable on boot
+sudo journalctl -u sentinelgo -f       # View logs
+```
+
+### Uninstall (if needed)
+```bash
+sudo systemctl stop sentinelgo
+sudo systemctl disable sentinelgo
+sudo rm -f /etc/systemd/system/sentinelgo.service
+sudo systemctl daemon-reload
+sudo rm -rf /opt/sentinelgo
+```
+
+### Troubleshooting
+
+#### Service Not Starting
+```bash
+# Check service status
+sudo systemctl status sentinelgo
+
+# Check for errors
+sudo journalctl -u sentinelgo -n 20
+
+# Check binary permissions
+ls -la /opt/sentinelgo/sentinelgo
+```
+
+#### Permission Issues
+```bash
+# Fix ownership
+sudo chown -R sentinelgo:sentinelgo /opt/sentinelgo
+
+# Fix permissions
+sudo chmod +x /opt/sentinelgo/sentinelgo
 ```
 
 ### Windows
@@ -117,7 +272,28 @@ tail -f /var/log/sentinelgo.log                                         # Logs
 install.bat install
 ```
 
-#### Option 2: Manual Installation
+#### Windows Script Commands:
+```cmd
+install.bat install        # Install service
+install.bat uninstall      # Remove service
+install.bat update         # Update binary
+install.bat status          # Show service status
+install.bat help            # Show help
+```
+
+#### Option 2: Simple macOS Installation (Alternative)
+```bash
+# For systems with complex permission issues
+sudo ./install-macos-simple.sh
+```
+
+#### Option 3: Reliable macOS Installation (Recommended)
+```bash
+# For systems with launchd issues or complex scenarios
+sudo ./install-macos-reliable.sh
+```
+
+#### Option 3: Manual Installation
 ```cmd
 # 1. Create directory
 mkdir C:\opt\sentinelgo

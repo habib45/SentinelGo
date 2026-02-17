@@ -89,15 +89,16 @@ create_service_user() {
     if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
         print_status "Creating service user: $SERVICE_USER"
         if [[ "$os" == "macos" ]]; then
-            # macOS: Create user with dscl
-            dscl . -create "/Users/$SERVICE_USER"
-            dscl . -create "/Users/$SERVICE_USER" UserShell /usr/bin/false
-            dscl . -create "/Users/$SERVICE_USER" RealName "SentinelGo Service"
-            dscl . -create "/Users/$SERVICE_USER" PrimaryGroupID 20
-            dscl . -create "/Users/$SERVICE_USER" NFSHomeDirectory "$INSTALL_DIR"
+            # macOS: Create user with proper group
+            sysadminctl -addUser "$SERVICE_USER" 2>/dev/null || dscl . -create /Users/"$SERVICE_USER"
+            # Create group if it doesn't exist
+            if ! dscl . -list /Groups | grep -q "^$SERVICE_USER$"; then
+                dscl . -create /Groups/"$SERVICE_USER"
+            fi
+            dscl . -append /Groups/"$SERVICE_USER" GroupMembership "$SERVICE_USER"
         else
-            # Linux: Use useradd
-            useradd -r -s /bin/false "$SERVICE_USER"
+            # Linux: Create user and group
+            useradd -r -s /bin/false "$SERVICE_USER" 2>/dev/null || true
         fi
         print_success "Service user created"
     else
@@ -142,11 +143,27 @@ setup_directories() {
     chmod +x "$INSTALL_DIR/$BINARY_NAME"
     
     local os=$(detect_os)
-    if [[ "$os" != "windows" ]]; then
-        chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+    
+    # Set permissions based on OS
+    if [[ "$os" == "macos" ]]; then
+        # macOS: Use chown with proper group handling
+        chown -R "$SERVICE_USER" "$INSTALL_DIR" 2>/dev/null || true
+        chmod -R 755 "$INSTALL_DIR" 2>/dev/null || true
+    elif [[ "$os" == "windows" ]]; then
+        # Windows: Skip ownership change
+        echo "[INFO] Skipping ownership change on Windows"
+    else
+        # Linux: Standard permissions with proper user/group format
+        if id "$SERVICE_USER" &>/dev/null 2>&1; then
+            chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" 2>/dev/null || true
+        else
+            # User exists but group might not, try with just user
+            chown -R "$SERVICE_USER" "$INSTALL_DIR" 2>/dev/null || true
+        fi
+        chmod -R 755 "$INSTALL_DIR" 2>/dev/null || true
     fi
     
-    print_success "Binary installed and permissions set"
+    print_success "Directories and permissions set"
 }
 
 # Install systemd service (Linux)
@@ -236,16 +253,20 @@ install_launchd_service() {
     <key>StandardOutPath</key>
     <string>/var/log/sentinelgo.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/sentinelgo.err</string>
+    <string>/var/log/sentinelgo.log</string>
+    <key>UserName</key>
+    <string>$SERVICE_USER</string>
     <key>WorkingDirectory</key>
     <string>$INSTALL_DIR</string>
-    <key>Comment</key>
-    <string>SentinelGo Agent v%s - Cross-platform system monitoring</string>
 </dict>
 </plist>
 EOF
     
+    # Set permissions for macOS
+    chown root:wheel "/Library/LaunchDaemons/com.sentinelgo.agent.plist"
     chmod 644 "/Library/LaunchDaemons/com.sentinelgo.agent.plist"
+    
+    # Load and start service
     launchctl load "/Library/LaunchDaemons/com.sentinelgo.agent.plist"
     launchctl start "com.sentinelgo.agent"
     

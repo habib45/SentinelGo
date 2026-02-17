@@ -27,7 +27,7 @@ macos:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o build/darwin/sentinelgo-darwin-arm64 ./cmd/sentinelgo
 
 # Build all platforms for release
-release: clean all
+release: pre-release clean all
 	@echo "Release built with version $(VERSION)"
 	@echo "Assets created in build/ directory:"
 	@find build -type f -name "*sentinelgo*" -exec ls -lh {} \;
@@ -68,6 +68,30 @@ deps:
 # Run tests
 test:
 	go test ./...
+
+# Pre-release quality checks
+pre-release: 
+	@echo "🚀 Running pre-release quality checks..."
+	@./scripts/pre-release-check.sh
+
+# Code quality checks
+quality-check:
+	@echo "🔍 Running quality checks..."
+	@go vet ./...
+	@echo "📦 Installing golangci-lint..."
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@export PATH=$$PATH:$$(go env GOPATH)/bin && golangci-lint run
+
+# Code format check
+format-check:
+	@echo "📝 Checking code formatting..."
+	@if [ -n "$$(gofmt -s -l .)" ]; then \
+		echo "❌ Code formatting issues found:"; \
+		gofmt -s -l .; \
+		echo "🔧 To fix: gofmt -s -w ."; \
+		exit 1; \
+	fi
+	@echo "✅ Code formatting check passed"
 
 # Create release assets directory structure
 setup:

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -43,7 +44,9 @@ func Load(path string) (*Config, error) {
 		}
 		configDir := filepath.Join(home, ".sentinelgo")
 		// Ensure config directory exists
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create config directory: %v", err)
+		}
 		cfg.Path = filepath.Join(configDir, "config.json")
 	}
 
@@ -70,7 +73,10 @@ func Load(path string) (*Config, error) {
 
 func generateDeviceID() string {
 	b := make([]byte, 8)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp if random fails
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
 	return hex.EncodeToString(b)
 }
 

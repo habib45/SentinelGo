@@ -78,7 +78,10 @@ func CheckAndApply(ctx context.Context, cfg *config.Config) error {
 			case "linux", "darwin":
 				cmd = exec.Command("kill", "-KILL", strconv.Itoa(proc.PID))
 			}
-			cmd.Run()
+			if err := cmd.Run(); err != nil {
+				// Log error but continue - process might already be dead
+				fmt.Printf("Warning: failed to kill process %d: %v\n", proc.PID, err)
+			}
 		}
 		// Wait for force kill to take effect
 		time.Sleep(2 * time.Second)
@@ -340,7 +343,9 @@ func stopOldProcesses() error {
 			case "linux", "darwin":
 				cmd = exec.Command("kill", "-KILL", strconv.Itoa(proc.PID))
 			}
-			cmd.Run()
+			if err := cmd.Run(); err != nil {
+				fmt.Printf("Warning: failed to force kill PID %d: %v\n", proc.PID, err)
+			}
 		}
 		// Wait for force kill to take effect
 		time.Sleep(2 * time.Second)
@@ -579,7 +584,9 @@ func restart(newPath string) error {
 				case "linux", "darwin":
 					cmd = exec.Command("kill", "-KILL", strconv.Itoa(proc.PID))
 				}
-				cmd.Run()
+				if err := cmd.Run(); err != nil {
+					fmt.Printf("Warning: failed to force stop PID %d: %v\n", proc.PID, err)
+				}
 			}
 			time.Sleep(1 * time.Second)
 		} else {

@@ -25,7 +25,11 @@ func NewLockFile(name string) *LockFile {
 		home = "/tmp"
 	}
 	lockDir := filepath.Join(home, ".sentinelgo")
-	os.MkdirAll(lockDir, 0755)
+	if err := os.MkdirAll(lockDir, 0755); err != nil {
+		// Continue even if we can't create the directory
+		// The lock file creation will fail later if needed
+		_ = err // Explicitly ignore the error
+	}
 
 	return &LockFile{
 		path: filepath.Join(lockDir, name+".lock"),
@@ -65,7 +69,12 @@ func (lf *LockFile) TryAcquire() error {
 	}
 
 	// Sync to ensure PID is written to disk
-	file.Sync()
+	if err := file.Sync(); err != nil {
+		file.Close()
+		lf.file = nil
+		os.Remove(lf.path)
+		return fmt.Errorf("sync file: %w", err)
+	}
 
 	lf.acquired = true
 	return nil
