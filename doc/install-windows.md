@@ -59,7 +59,78 @@ The script will automatically:
     Copy-Item .\sentinelgo-windows-amd64.exe 'C:\Program Files\SentinelGo\sentinelgo.exe'
    ```
 
-#### Step 4: Create Configuration File
+#### Step 4: Configuration Options
+
+### Option 1: Default Configuration (Recommended)
+By default, SentinelGo will create a config file at `C:\Program Files\SentinelGo\.sentinelgo\config.json` with these settings:
+```json
+{
+  "heartbeat_interval": "5m0s",
+  "github_owner": "habib45",
+  "github_repo": "SentinelGo",
+  "current_version": "v1.9.9.0",
+  "auto_update": false
+}
+```
+
+### Option 2: Custom Configuration
+Create a custom config file at your preferred location:
+
+#### Method A: Use Default Location
+```powershell
+# Config will be created automatically at C:\Program Files\SentinelGo\.sentinelgo\config.json
+C:\Program Files\SentinelGo\sentinelgo.exe -run
+```
+
+#### Method B: Specify Custom Path
+```powershell
+# Create config at custom location
+New-Item -ItemType Directory -Path "C:\MySentinelGoConfig" -Force
+
+$ConfigContent = @"
+{
+  "heartbeat_interval": "10m0s",
+  "github_owner": "your-username",
+  "github_repo": "your-repo",
+  "current_version": "v1.9.9.0",
+  "auto_update": true
+}
+"@
+
+$ConfigContent | Out-File -FilePath "C:\MySentinelGoConfig\config.json" -Encoding UTF8 -Force
+
+# Run with custom config
+C:\Program Files\SentinelGo\sentinelgo.exe -run -config "C:\MySentinelGoConfig\config.json"
+```
+
+#### Method C: System-Wide Config
+```powershell
+# Create system-wide config
+New-Item -ItemType Directory -Path "C:\sentinelgo" -Force
+
+$ConfigContent = @"
+{
+  "heartbeat_interval": "5m0s",
+  "github_owner": "habib45",
+  "github_repo": "SentinelGo",
+  "current_version": "v1.9.9.0",
+  "auto_update": false
+}
+"@
+
+$ConfigContent | Out-File -FilePath "C:\sentinelgo\config.json" -Encoding UTF8 -Force
+```
+
+### Option 3: Environment Variable
+```powershell
+# Set config path via environment variable
+$env:SENTINELGO_CONFIG = "C:\Path\To\Your\config.json"
+C:\Program Files\SentinelGo\sentinelgo.exe -run
+```
+
+### Option 4: Manual Config Creation
+If you prefer to create config manually:
+
 1. Create config directory:
    ```powershell
    mkdir "C:\Program Files\SentinelGo\.sentinelgo"
@@ -68,27 +139,23 @@ The script will automatically:
    ```powershell
    New-Item -Path "C:\Program Files\SentinelGo\.sentinelgo\config.json"
    ```
-3. Check current permissions
-   ```powershell
-   icacls "C:\Program Files\SentinelGo\.sentinelgo\config.json"
-   ```
-4. Test if you can edit
+3. Edit the file:
    ```powershell
    notepad "C:\Program Files\SentinelGo\.sentinelgo\config.json"
    ```
-
-5. Copy and paste this text into Notepad:
+4. Copy and paste this content:
    ```json
    {
-     "device_id": "my-computer-001",
      "heartbeat_interval": "5m0s",
      "github_owner": "habib45",
      "github_repo": "SentinelGo",
-     "current_version": "v1.9.8",
+     "current_version": "v1.9.9.0",
      "auto_update": false
    }
    ```
-6. Save the file and close Notepad
+5. Save the file (Ctrl+S) and close Notepad
+
+**Important:** The `heartbeat_interval` must be a **string** in quotes (e.g., `"5m0s"`) not a number (e.g., `300`).
 
 #### Step 5: Install as Windows Service
 1. In PowerShell, go to SentinelGo folder:

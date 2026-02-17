@@ -24,8 +24,11 @@ fi
 
 # Stop any existing processes
 echo "🛑 Stopping existing processes..."
-sudo launchctl stop "com.sentinelgo.agent" 2>/dev/null || true
+sudo launchctl stop "com.sentinelgo" 2>/dev/null || true
 sudo launchctl unload "/Library/LaunchDaemons/com.sentinelgo.agent.plist" 2>/dev/null || true
+sudo launchctl unload "/Library/LaunchDaemons/com.sentinelgo.plist" 2>/dev/null || true
+sudo rm -f "/Library/LaunchDaemons/com.sentinelgo.agent.plist" 2>/dev/null || true
+sudo rm -f "/Library/LaunchDaemons/com.sentinelgo.plist" 2>/dev/null || true
 sudo pkill -f sentinelgo 2>/dev/null || true
 
 # Create user if needed
@@ -64,8 +67,18 @@ sudo chmod +x "$INSTALL_DIR/$BINARY_NAME"
 # Create config
 echo "📝 Creating configuration..."
 if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
-    echo '{"heartbeat_interval":"5m0s","auto_update":false}' | sudo tee "$CONFIG_DIR/config.json"
+    sudo tee "$CONFIG_DIR/config.json" > /dev/null <<'EOF'
+{
+  "heartbeat_interval": "5m0s",
+  "github_owner": "habib45",
+  "github_repo": "SentinelGo",
+  "current_version": "v1.9.8",
+  "auto_update": false
+}
+EOF
     echo "✅ Default config created"
+else
+    echo "✅ Config already exists"
 fi
 
 # Test binary first
@@ -78,13 +91,13 @@ fi
 
 # Try launchd service first
 echo "🚀 Attempting launchd service..."
-sudo tee /Library/LaunchDaemons/com.sentinelgo.agent.plist > /dev/null << 'EOF'
+sudo tee /Library/LaunchDaemons/com.sentinelgo.plist > /dev/null << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.sentinelgo.agent</string>
+    <string>com.sentinelgo</string>
     <key>ProgramArguments</key>
     <array>
         <string>$INSTALL_DIR/$BINARY_NAME</string>
@@ -95,36 +108,54 @@ sudo tee /Library/LaunchDaemons/com.sentinelgo.agent.plist > /dev/null << 'EOF'
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/sentinelgo.log</string>
+    <string>/var/log/sentinelgo.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/sentinelgo.log</string>
+    <string>/var/log/sentinelgo.error.log</string>
     <key>WorkingDirectory</key>
     <string>$INSTALL_DIR</string>
     <key>UserName</key>
     <string>$SERVICE_USER</string>
+    <key>GroupName</key>
+    <string>$SERVICE_USER</string>
+    <key>ProcessType</key>
+    <string>Background</string>
 </dict>
 </plist>
 EOF
 
 # Set plist permissions
-sudo chown root:wheel /Library/LaunchDaemons/com.sentinelgo.agent.plist
-sudo chmod 644 /Library/LaunchDaemons/com.sentinelgo.agent.plist
+sudo chown root:wheel /Library/LaunchDaemons/com.sentinelgo.plist
+sudo chmod 644 /Library/LaunchDaemons/com.sentinelgo.plist
+
+# Ensure log directory exists
+sudo mkdir -p /var/log
+sudo touch /var/log/sentinelgo.log /var/log/sentinelgo.error.log
+sudo chown $SERVICE_USER:$SERVICE_USER /var/log/sentinelgo.log /var/log/sentinelgo.error.log
 
 # Try to load launchd service
 echo "🔄 Loading launchd service..."
 LAUNCHD_SUCCESS=false
-if sudo launchctl load /Library/LaunchDaemons/com.sentinelgo.agent.plist 2>/dev/null; then
+if sudo launchctl load /Library/LaunchDaemons/com.sentinelgo.plist 2>/dev/null; then
     echo "✅ Launchd service loaded"
     
     # Try to start
-    if sudo launchctl start "com.sentinelgo.agent" 2>/dev/null; then
+    if sudo launchctl start "com.sentinelgo" 2>/dev/null; then
         echo "✅ Launchd service started successfully!"
         LAUNCHD_SUCCESS=true
+        
+        # Test auto-start
+        echo "🔄 Testing auto-start..."
+        sleep 3
+        if sudo launchctl list | grep -q "com.sentinelgo"; then
+            echo "✅ Service is running and will auto-start on reboot!"
+        else
+            echo "⚠️ Service loaded but may not be running"
+        fi
     else
-        echo "⚠️  Launchd service failed to start"
+        echo "⚠️ Launchd service failed to start"
     fi
 else
-    echo "⚠️  Launchd service failed to load"
+    echo "⚠️ Launchd service failed to load"
 fi
 
 # Fallback to background process if launchd fails
@@ -155,7 +186,7 @@ fi
 # Show status
 echo ""
 echo "📊 Current Status:"
-if sudo launchctl list | grep -q "com.sentinelgo.agent"; then
+if sudo launchctl list | grep -q "com.sentinelgo"; then
     echo "✅ Launchd service: $(sudo launchctl list | grep sentinelgo)"
 else
     echo "ℹ️  Launchd service: Not loaded"
@@ -167,7 +198,8 @@ ps aux | grep sentinelgo | grep -v grep || echo "No processes found"
 
 echo ""
 echo "📋 Logs:"
-echo "tail -f /tmp/sentinelgo.log"
+echo "tail -f /var/log/sentinelgo.log"
+echo "tail -f /var/log/sentinelgo.error.log"
 
 echo ""
 echo "🎉 Installation complete!"
@@ -176,4 +208,5 @@ echo "📖 Management Commands:"
 echo "  Stop:  sudo pkill -f sentinelgo"
 echo "  Start: sudo -u sentinelgo nohup $INSTALL_DIR/$BINARY_NAME -run &"
 echo "  Status: ps aux | grep sentinelgo"
-echo "  Logs:  tail -f /tmp/sentinelgo.log"
+echo "  Logs:  tail -f /var/log/sentinelgo.log"
+echo "  Service: sudo launchctl list | grep sentinelgo"
