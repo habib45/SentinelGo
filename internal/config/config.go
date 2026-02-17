@@ -25,6 +25,44 @@ type Config struct {
 	AutoUpdate        bool          `json:"auto_update"` // Enable automatic updates
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling for Config
+func (c *Config) UnmarshalJSON(data []byte) error {
+	type Alias Config
+	temp := &struct {
+		HeartbeatInterval string `json:"heartbeat_interval"`
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
+	// Parse the duration string
+	if temp.HeartbeatInterval != "" {
+		duration, err := time.ParseDuration(temp.HeartbeatInterval)
+		if err != nil {
+			return fmt.Errorf("invalid heartbeat_interval format: %v", err)
+		}
+		c.HeartbeatInterval = duration
+	}
+
+	return nil
+}
+
+// MarshalJSON implements custom JSON marshaling for Config
+func (c *Config) MarshalJSON() ([]byte, error) {
+	type Alias Config
+	return json.Marshal(&struct {
+		HeartbeatInterval string `json:"heartbeat_interval"`
+		*Alias
+	}{
+		HeartbeatInterval: c.HeartbeatInterval.String(),
+		Alias:             (*Alias)(c),
+	})
+}
+
 func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Path:              path,

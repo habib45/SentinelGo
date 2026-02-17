@@ -44,7 +44,7 @@
    ```json
    {
      "device_id": "my-computer-001",
-     "heartbeat_interval": "5m",
+     "heartbeat_interval": "5m0s",
      "github_owner": "habib45",
      "github_repo": "SentinelGo",
      "current_version": "v1.8.4"

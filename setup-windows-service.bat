@@ -7,7 +7,19 @@ setlocal enabledelayedexpansion
 REM Configuration
 set SERVICE_NAME=sentinelgo
 set DISPLAY_NAME=SentinelGo Agent
-set BINARY_PATH=C:\Program Files\SentinelGo\sentinelgo.exe
+REM Try multiple possible binary locations
+if exist "C:\Program Files\SentinelGo\sentinelgo.exe" (
+    set BINARY_PATH=C:\Program Files\SentinelGo\sentinelgo.exe
+) else if exist "C:\Program Files (x86)\SentinelGo\sentinelgo.exe" (
+    set BINARY_PATH=C:\Program Files (x86)\SentinelGo\sentinelgo.exe
+) else if exist "%~dp0sentinelgo.exe" (
+    set BINARY_PATH=%~dp0sentinelgo.exe
+) else (
+    echo [ERROR] SentinelGo binary not found in standard locations
+    echo [INFO] Please install SentinelGo first using install.bat
+    pause
+    exit /b 1
+)
 set DESCRIPTION=SentinelGo monitoring agent for system health and performance
 
 echo [INFO] SentinelGo Windows Service Setup
@@ -111,25 +123,46 @@ sc.exe start "%SERVICE_NAME%"
 REM Wait for service to start
 timeout /t 5 /nobreak >nul
 
-REM Check service status
+REM Check service status more reliably
 echo [INFO] Checking service status...
-sc.exe query "%SERVICE_NAME%" | find "STATE"
-
+sc.exe query "%SERVICE_NAME%" >nul 2>&1
 if %errorLevel% equ 0 (
-    echo [SUCCESS] SentinelGo service is running in background
-    echo [INFO] Service will automatically start on Windows boot
-    echo [INFO] Service runs without desktop interaction
+    REM Service exists, check if running
+    for /f "tokens=3 delims=: " %%i in ('sc.exe query "%SERVICE_NAME%" ^| find "STATE"') do (
+        if "%%i"=="RUNNING" (
+            echo [SUCCESS] SentinelGo service is running in background
+            echo [INFO] Service will automatically start on Windows boot
+            echo [INFO] Service runs without desktop interaction
+            set SERVICE_RUNNING=1
+        ) else (
+            echo [WARNING] Service exists but not running (STATE: %%i)
+            set SERVICE_RUNNING=0
+        )
+    )
 ) else (
-    echo [ERROR] Service failed to start
-    echo [INFO] Checking service logs...
+    echo [ERROR] Service not found or query failed
+    set SERVICE_RUNNING=0
     
-    REM Get more detailed error information
-    sc.exe query "%SERVICE_NAME%"
-    
-    echo [INFO] Trying manual start for debugging...
-    echo [INFO] Running: "%BINARY_PATH%" -run
-    echo [INFO] Press Ctrl+C to stop manual run"
-    "%BINARY_PATH%" -run
+    REM Try Task Scheduler fallback
+    echo [INFO] Trying Task Scheduler fallback...
+    schtasks /create /tn "SentinelGo" /tr "\"%BINARY_PATH%\" -run" /sc onstart /ru SYSTEM /rl highest /f 2>nul
+    if !errorLevel! equ 0 (
+        echo [SUCCESS] Task Scheduler fallback created
+        echo [INFO] Starting Task Scheduler task...
+        schtasks /run /tn "SentinelGo" 2>nul
+        timeout /t 3 /nobreak >nul
+        
+        REM Check if process is running
+        tasklist /FI "IMAGENAME eq sentinelgo.exe" 2>nul | find "sentinelgo.exe" >nul
+        if !errorLevel! equ 0 (
+            echo [SUCCESS] SentinelGo is running via Task Scheduler
+            set SERVICE_RUNNING=1
+        ) else (
+            echo [ERROR] Task Scheduler task failed to start
+        )
+    ) else (
+        echo [ERROR] Task Scheduler fallback failed
+    )
 )
 
 echo.
@@ -138,14 +171,21 @@ echo   Start:    sc.exe start %SERVICE_NAME%
 echo   Stop:     sc.exe stop %SERVICE_NAME%
 echo   Status:   sc.exe query %SERVICE_NAME%
 echo   Config:   sc.exe qc %SERVICE_NAME%
+echo   Delete:   sc.exe delete %SERVICE_NAME%
+echo   Task Start: schtasks /run /tn "SentinelGo"
+echo   Task Stop:  schtasks /end /tn "SentinelGo"
+echo   Task Delete: schtasks /delete /tn "SentinelGo" /f
 echo   Logs:     eventvwr.msc (Windows Event Viewer)
 echo.
 echo [INFO] Background Operation Features:
-echo   - Runs as Windows Service
+echo   - Runs as Windows Service (primary)
+echo   - Task Scheduler fallback (backup)
 echo   - No desktop interaction required
 echo   - Automatic start on boot
 echo   - Auto-restart on failure
 echo   - Runs with SYSTEM privileges
 echo   - Logs to Windows Event Log
+echo   - Multiple installation paths supported
+echo   - Comprehensive error handling
 
 pause

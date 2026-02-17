@@ -98,15 +98,15 @@ jobs:
       - name: Create release packages
         run: |
           mkdir -p release
-          cp install.sh INSTALLATION.md release/
+          cp install.sh INSTALLATION.md install-linux-simple.sh setup-windows-service.bat install-macos-simple.sh release/
           
           # Create individual packages
           cd release
-          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-windows.tar.gz" "../artifacts/sentinelgo-windows-amd64.exe" install.sh INSTALLATION.md
-          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz" "../artifacts/sentinelgo-linux-amd64" install.sh INSTALLATION.md
-          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz" "../artifacts/sentinelgo-linux-arm64" install.sh INSTALLATION.md
-          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz" "../artifacts/sentinelgo-darwin-amd64" install.sh INSTALLATION.md
-          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz" "../artifacts/sentinelgo-darwin-arm64" install.sh INSTALLATION.md
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-windows.tar.gz" "../artifacts/sentinelgo-windows-amd64.exe" install.sh INSTALLATION.md setup-windows-service.bat
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz" "../artifacts/sentinelgo-linux-amd64" install.sh INSTALLATION.md install-linux-simple.sh
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz" "../artifacts/sentinelgo-linux-arm64" install.sh INSTALLATION.md install-linux-simple.sh
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz" "../artifacts/sentinelgo-darwin-amd64" install.sh INSTALLATION.md install-macos-simple.sh
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz" "../artifacts/sentinelgo-darwin-arm64" install.sh INSTALLATION.md install-macos-simple.sh
           
           ls -la
 

@@ -32,7 +32,7 @@ sudo chown -R $(whoami) /opt/sentinelgo
 sudo mkdir -p /etc/sentinelgo
 sudo tee /etc/sentinelgo/config.json > /dev/null <<'EOF'
 {
-  "heartbeat_interval": "5m",
+  "heartbeat_interval": "5m0s",
   "github_owner": "habib45",
   "github_repo": "SentinelGo",
   "current_version": "v1.0.0"

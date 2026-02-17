@@ -66,6 +66,9 @@ print_status 0 "go vet check passed"
 print_info "Installing golangci-lint..."
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
+# Add GOPATH/bin to PATH for this script
+export PATH=$PATH:$(go env GOPATH)/bin
+
 print_info "Running golangci-lint..."
 if ! golangci-lint run; then
     print_error "golangci-lint found issues"

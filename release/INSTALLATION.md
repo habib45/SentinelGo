@@ -305,7 +305,7 @@ copy sentinelgo-windows-amd64.exe C:\opt\sentinelgo\sentinelgo.exe
 mkdir C:\opt\sentinelgo\.sentinelgo
 
 # 4. Create config file
-echo {"heartbeat_interval":"5m","auto_update":false} > C:\opt\sentinelgo\.sentinelgo\config.json
+echo {"heartbeat_interval":"5m0s","auto_update":false} > C:\opt\sentinelgo\.sentinelgo\config.json
 
 # 5. Install as service (Run as Administrator)
 sc.exe create sentinelgo binPath= "C:\opt\sentinelgo\sentinelgo.exe" -run
