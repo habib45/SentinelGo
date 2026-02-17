@@ -111,7 +111,7 @@ func (p *program) run() {
 		go updater.AutoUpdateChecker(ctx, p.cfg)
 	}
 
-	ticker := time.NewTicker(p.cfg.HeartbeatInterval)
+	ticker := time.NewTicker(p.cfg.GetHeartbeatInterval())
 	defer ticker.Stop()
 
 	// Initial heartbeat

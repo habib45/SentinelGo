@@ -16,13 +16,13 @@ var (
 )
 
 type Config struct {
-	Path              string        `json:"-"` // Path to the config file
-	HeartbeatInterval time.Duration `json:"heartbeat_interval"`
-	GitHubOwner       string        `json:"github_owner"`
-	GitHubRepo        string        `json:"github_repo"`
-	CurrentVersion    string        `json:"current_version"`
-	DeviceID          string        `json:"device_id"`   // persistent unique identifier
-	AutoUpdate        bool          `json:"auto_update"` // Enable automatic updates
+	Path              string `json:"-"` // Path to the config file
+	HeartbeatInterval string `json:"heartbeat_interval"`
+	GitHubOwner       string `json:"github_owner"`
+	GitHubRepo        string `json:"github_repo"`
+	CurrentVersion    string `json:"current_version"`
+	DeviceID          string `json:"device_id"`   // persistent unique identifier
+	AutoUpdate        bool   `json:"auto_update"` // Enable automatic updates
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for Config
@@ -41,11 +41,11 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 
 	// Parse the duration string
 	if temp.HeartbeatInterval != "" {
-		duration, err := time.ParseDuration(temp.HeartbeatInterval)
+		_, err := time.ParseDuration(temp.HeartbeatInterval)
 		if err != nil {
 			return fmt.Errorf("invalid heartbeat_interval format: %v", err)
 		}
-		c.HeartbeatInterval = duration
+		c.HeartbeatInterval = temp.HeartbeatInterval
 	}
 
 	return nil
@@ -58,15 +58,21 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		HeartbeatInterval string `json:"heartbeat_interval"`
 		*Alias
 	}{
-		HeartbeatInterval: c.HeartbeatInterval.String(),
+		HeartbeatInterval: c.HeartbeatInterval,
 		Alias:             (*Alias)(c),
 	})
+}
+
+// GetHeartbeatInterval returns the heartbeat interval as time.Duration
+func (c *Config) GetHeartbeatInterval() time.Duration {
+	duration, _ := time.ParseDuration(c.HeartbeatInterval)
+	return duration
 }
 
 func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Path:              path,
-		HeartbeatInterval: 5 * time.Minute,
+		HeartbeatInterval: "5m0s",
 		GitHubOwner:       "habib45",
 		GitHubRepo:        "SentinelGo",
 		CurrentVersion:    Version, // Use injected version
