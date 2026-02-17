@@ -16,25 +16,25 @@ var (
 )
 
 type Config struct {
-	Path              string `json:"-"` // Path to the config file
-	HeartbeatInterval string `json:"heartbeat_interval"`
-	GitHubOwner       string `json:"github_owner"`
-	GitHubRepo        string `json:"github_repo"`
-	CurrentVersion    string `json:"current_version"`
-	DeviceID          string `json:"device_id"`   // persistent unique identifier
-	AutoUpdate        bool   `json:"auto_update"` // Enable automatic updates
+	Path              string        `json:"-"` // Path to the config file
+	HeartbeatInterval time.Duration `json:"heartbeat_interval"`
+	GitHubOwner       string        `json:"github_owner"`
+	GitHubRepo        string        `json:"github_repo"`
+	CurrentVersion    string        `json:"current_version"`
+	DeviceID          string        `json:"device_id"`   // persistent unique identifier
+	AutoUpdate        bool          `json:"auto_update"` // Enable automatic updates
 }
 
 // GetHeartbeatInterval returns the heartbeat interval as time.Duration
 func (c *Config) GetHeartbeatInterval() time.Duration {
-	duration, _ := time.ParseDuration(c.HeartbeatInterval)
+	duration, _ := time.ParseDuration("5m0s")
 	return duration
 }
 
 func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Path:              path,
-		HeartbeatInterval: "5m0s",
+		HeartbeatInterval: 5 * time.Minute,
 		GitHubOwner:       "habib45",
 		GitHubRepo:        "SentinelGo",
 		CurrentVersion:    Version, // Use injected version
