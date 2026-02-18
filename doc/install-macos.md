@@ -18,12 +18,17 @@ sudo mkdir -p /opt/sentinelgo
 
 ## 3. Copy the Binary
 ```bash
+#copy binary
 sudo cp sentinelgo-darwin-amd64 /opt/sentinelgo/sentinelgo
 OR 
 sudo cp sentinelgo-darwin-armd64 /opt/sentinelgo/sentinelgo
 
+#set permission
 sudo chmod +x /opt/sentinelgo/sentinelgo
 sudo chown -R $(whoami) /opt/sentinelgo
+
+#set Auto-update to true
+sudo ./sentinelgo -enable-auto-update
 
 ```
 
@@ -37,7 +42,7 @@ By default, SentinelGo will create a config file at `/opt/sentinelgo/.sentinelgo
   "github_owner": "habib45",
   "github_repo": "SentinelGo",
   "current_version": "v1.9.9.0",
-  "auto_update": false
+  "auto_update": true
 }
 ```
 
@@ -50,7 +55,7 @@ Create a custom config file at your preferred location:
 /opt/sentinelgo/sentinelgo -run
 ```
 
-#### Method B: Specify Custom Path
+<!-- #### Method B: Specify Custom Path
 ```bash
 # Create config at custom location
 mkdir -p ~/my-sentinelgo-config
@@ -65,9 +70,9 @@ tee ~/my-sentinelgo-config/config.json > /dev/null <<'EOF'
 EOF
 
 # Run with custom config
-/opt/sentinelgo/sentinelgo -run -config ~/my-sentinelgo-config/config.json
-```
-
+/opt/sentinelgo/sentinelgo -run -config ~/my-sentinelgo-config/config.json 
+```-->
+<!-- 
 #### Method C: System-Wide Config
 ```bash
 # Create system-wide config
@@ -81,7 +86,7 @@ sudo tee /etc/sentinelgo/config.json > /dev/null <<'EOF'
   "auto_update": false
 }
 EOF
-```
+``` -->
 
 ### Option 3: Environment Variable
 ```bash
@@ -90,25 +95,42 @@ export SENTINELGO_CONFIG="/path/to/your/config.json"
 /opt/sentinelgo/sentinelgo -run
 ```
 
-**Important:** The `heartbeat_interval` must be a **string** in quotes (e.g., `"5m0s"`) not a number (e.g., `300`).
-
 ## 5. Install as Service (Recommended)
 The SentinelGo binary now includes automated macOS service management:
 
 ```bash
+#set permission
+sudo chown -R $(whoami) ~/.sentinelgo
+
 # Navigate to the binary directory
 cd /opt/sentinelgo
 
 # Install as launchd service (requires sudo)
 sudo ./sentinelgo -install
-sudo chown -R $(whoami) ~/.sentinelgo
+
+# Check service status
+./sentinelgo -status
+
+# Check service version
+./sentinelgo -version
+
+# Check service run
+./sentinelgo -run
+
+# Check service stop
+./sentinelgo -stop
+
+# Check service uninstall
+./sentinelgo -uninstall
+
+# Check launchd service specifically
+sudo launchctl list | grep sentinelgo
 ```
 
 This will automatically:
 - Create the launchd plist file at `/Library/LaunchDaemons/com.sentinelgo.agent.plist`
 - Load and start the service
 - Configure the service to start automatically on system boot
-- Set up logging to `/var/log/sentinelgo.log` and `/var/log/sentinelgo.err`
 
 ### Important Notes MAC Alert “sentinelgo” Not Opened
 
@@ -121,15 +143,6 @@ This will automatically:
 6. Run the command again.
 7. This time click Open
 
-
-## 6. Verify Installation
-```bash
-# Check service status
-./sentinelgo -status
-
-# Check launchd service specifically
-sudo launchctl list | grep sentinelgo
-```
 
 ## 7. Troubleshooting
 
@@ -150,7 +163,7 @@ sudo tee /etc/sentinelgo/config.json > /dev/null <<'EOF'
 }
 EOF
 
-# Ensure binary is updated (v1.9.9+)
+# Ensure binary is updated
 /opt/sentinelgo/sentinelgo -version
 ```
 
