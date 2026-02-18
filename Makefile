@@ -27,13 +27,23 @@ macos:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o build/darwin/sentinelgo-darwin-arm64 ./cmd/sentinelgo
 
 # Build all platforms for release
-release: clean all
+release: pre-release clean all
 	@echo "Release built with version $(VERSION)"
 	@echo "Assets created in build/ directory:"
 	@find build -type f -name "*sentinelgo*" -exec ls -lh {} \;
+	@echo "\nCreating release packages..."
+	@mkdir -p release
+	@cp install.sh INSTALLATION.md release/
+	@cp build/windows/sentinelgo-windows-amd64.exe release/
+	@cp build/linux/sentinelgo-linux-amd64 release/
+	@cp build/linux/sentinelgo-linux-arm64 release/
+	@cp build/darwin/sentinelgo-darwin-amd64 release/
+	@cp build/darwin/sentinelgo-darwin-arm64 release/
+	@echo "\nRelease packages ready in release/ directory:"
+	@ls -la release/
 
 clean:
-	rm -rf build/
+	rm -rf build/ release/
 
 # Development build (current platform only)
 build:
@@ -59,11 +69,46 @@ deps:
 test:
 	go test ./...
 
+# Pre-release quality checks
+pre-release: 
+	@echo "🚀 Running pre-release quality checks..."
+	@./scripts/pre-release-check.sh
+
+# Code quality checks
+quality-check:
+	@echo "🔍 Running quality checks..."
+	@go vet ./...
+	@echo "📦 Installing golangci-lint..."
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@export PATH=$$PATH:$$(go env GOPATH)/bin && golangci-lint run
+
+# Code format check
+format-check:
+	@echo "📝 Checking code formatting..."
+	@if [ -n "$$(gofmt -s -l .)" ]; then \
+		echo "❌ Code formatting issues found:"; \
+		gofmt -s -l .; \
+		echo "🔧 To fix: gofmt -s -w ."; \
+		exit 1; \
+	fi
+	@echo "✅ Code formatting check passed"
+
 # Create release assets directory structure
 setup:
 	mkdir -p build/windows build/linux build/darwin
 
-# Example usage:
+# Create distribution packages
+packages: release
+	@echo "Creating distribution packages..."
+	@cd release && \
+		tar -czf sentinelgo-$(VERSION)-windows.tar.gz sentinelgo-windows-amd64.exe install.sh INSTALLATION.md && \
+		tar -czf sentinelgo-$(VERSION)-linux-amd64.tar.gz sentinelgo-linux-amd64 install.sh INSTALLATION.md && \
+		tar -czf sentinelgo-$(VERSION)-linux-arm64.tar.gz sentinelgo-linux-arm64 install.sh INSTALLATION.md && \
+		tar -czf sentinelgo-$(VERSION)-darwin-amd64.tar.gz sentinelgo-darwin-amd64 install.sh INSTALLATION.md && \
+		tar -czf sentinelgo-$(VERSION)-darwin-arm64.tar.gz sentinelgo-darwin-arm64 install.sh INSTALLATION.md
+	@echo "Packages created:"
+	@ls -la release/*.tar.gz
+
 # make release VERSION=v1.0.0
 # make release (uses git tag or "dev")
 # make build (development build for current platform)

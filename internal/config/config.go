@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -20,7 +21,14 @@ type Config struct {
 	GitHubOwner       string        `json:"github_owner"`
 	GitHubRepo        string        `json:"github_repo"`
 	CurrentVersion    string        `json:"current_version"`
-	DeviceID          string        `json:"device_id"` // persistent unique identifier
+	DeviceID          string        `json:"device_id"`   // persistent unique identifier
+	AutoUpdate        bool          `json:"auto_update"` // Enable automatic updates
+}
+
+// GetHeartbeatInterval returns the heartbeat interval as time.Duration
+func (c *Config) GetHeartbeatInterval() time.Duration {
+	duration, _ := time.ParseDuration("5m0s")
+	return duration
 }
 
 func Load(path string) (*Config, error) {
@@ -30,15 +38,22 @@ func Load(path string) (*Config, error) {
 		GitHubOwner:       "habib45",
 		GitHubRepo:        "SentinelGo",
 		CurrentVersion:    Version, // Use injected version
+		AutoUpdate:        false,   // Disabled by default for safety
 	}
 
 	if path == "" {
 		// Default location
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, err
+			// Fallback to /opt/sentinelgo for service environment
+			home = "/opt/sentinelgo"
 		}
-		cfg.Path = filepath.Join(home, ".sentinelgo", "config.json")
+		configDir := filepath.Join(home, ".sentinelgo")
+		// Ensure config directory exists
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create config directory: %v", err)
+		}
+		cfg.Path = filepath.Join(configDir, "config.json")
 	}
 
 	if _, err := os.Stat(cfg.Path); err == nil {
@@ -64,7 +79,10 @@ func Load(path string) (*Config, error) {
 
 func generateDeviceID() string {
 	b := make([]byte, 8)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp if random fails
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
 	return hex.EncodeToString(b)
 }
 

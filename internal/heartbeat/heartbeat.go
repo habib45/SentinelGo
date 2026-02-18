@@ -18,11 +18,13 @@ var (
 )
 
 type Payload struct {
-	DeviceID string `json:"device_id"`
-	Alive    string `json:"alive"`
-	BSID     string `json:"employee_id"`
-	OS       string `json:"os"`
-	Uptime   uint64 `json:"uptime"`
+	DeviceID        string `json:"device_id"`
+	Alive           string `json:"alive"`
+	BSID            string `json:"employee_id"`
+	OS              string `json:"os"`
+	Uptime          uint64 `json:"uptime"`
+	UptimeFormatted string `json:"uptime_formatted"`
+	MACAddress      string `json:"mac_address"`
 }
 
 func init() {
@@ -32,11 +34,13 @@ func init() {
 func Send(ctx context.Context, cfg *config.Config, sysInfo *osinfo.SystemInfo) error {
 
 	payload := Payload{
-		DeviceID: cfg.DeviceID,
-		Alive:    "true",
-		BSID:     sysInfo.EmployeeId,
-		OS:       sysInfo.OS,
-		Uptime:   sysInfo.Uptime,
+		DeviceID:        cfg.DeviceID,
+		Alive:           "true",
+		BSID:            sysInfo.EmployeeId,
+		OS:              sysInfo.OS,
+		Uptime:          sysInfo.Uptime,
+		UptimeFormatted: sysInfo.UptimeFormatted,
+		MACAddress:      sysInfo.MACAddress,
 	}
 
 	body, err := json.Marshal(payload)
