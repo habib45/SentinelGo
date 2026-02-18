@@ -72,7 +72,7 @@ API_TOKEN=your-api-token
 Example:
 ```json
 {
-  "heartbeat_interval": "5m",
+  "heartbeat_interval": "5m0s",
   "github_owner": "habib45",
   "github_repo": "SentinelGo",
   "current_version": "v0.1.0"

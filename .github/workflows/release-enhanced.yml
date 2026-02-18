@@ -1,0 +1,355 @@
+name: Release Enhanced
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO_VERSION: '1.22'
+
+jobs:
+  # Phase 1: Code Format & Quality Check
+  quality-check:
+    name: Code Format & Quality Check
+    runs-on: ubuntu-latest
+    outputs:
+      quality-passed: ${{ steps.quality-gate.outputs.passed }}
+      error-message: ${{ steps.quality-gate.outputs.error-message }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: make deps
+
+      # 1. Code Format Check
+      - name: Code Format Check
+        id: fmt-check
+        run: |
+          echo "🔍 Checking code formatting..."
+          UNFORMATTED=$(gofmt -s -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "❌ Code formatting issues found:"
+            echo "$UNFORMATTED"
+            echo ""
+            echo "🔧 To fix: run 'gofmt -s -w .' locally"
+            echo ""
+            echo "⏸️ Workflow paused - please fix formatting issues before proceeding"
+            echo "error-message=Code formatting issues found. Run 'gofmt -s -w .' to fix." >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "✅ Code formatting check passed"
+
+      # 2. Code Quality Check
+      - name: Code Quality Check
+        id: quality-check
+        run: |
+          echo "🔍 Running code quality checks..."
+          
+          # Run go vet
+          echo "Running go vet..."
+          if ! go vet ./...; then
+            echo "❌ go vet found issues"
+            echo "🔧 Please fix vet issues locally with: go vet ./..."
+            echo ""
+            echo "⏸️ Workflow paused - please fix vet issues before proceeding"
+            echo "error-message=go vet found issues. Run 'go vet ./...' to fix." >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Install and run golangci-lint
+          echo "Installing golangci-lint..."
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          
+          echo "Running golangci-lint..."
+          if ! golangci-lint run; then
+            echo "❌ golangci-lint found issues"
+            echo "🔧 Please fix linting issues locally with: golangci-lint run"
+            echo ""
+            echo "⏸️ Workflow paused - please fix linting issues before proceeding"
+            echo "error-message=golangci-lint found issues. Run 'golangci-lint run' to fix." >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "✅ Code quality checks passed"
+
+      # Quality Gate
+      - name: Quality Gate
+        id: quality-gate
+        run: |
+          echo "passed=true" >> $GITHUB_OUTPUT
+          echo "✅ All quality checks passed - proceeding to code review"
+
+  # Phase 2: Code Review Check
+  code-review:
+    name: Code Review Check
+    runs-on: ubuntu-latest
+    needs: quality-check
+    if: needs.quality-check.outputs.quality-passed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Code Review Analysis
+        run: |
+          echo "🔍 Running automated code review..."
+          
+          # Check for breaking changes
+          echo "Analyzing changes since last tag..."
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGED_FILES=$(git diff --name-only $PREV_TAG..HEAD | grep -E "\.go$" || true)
+            if [ -n "$CHANGED_FILES" ]; then
+              echo "📝 Changed Go files:"
+              echo "$CHANGED_FILES"
+              
+              # Check for breaking changes in core packages
+              if echo "$CHANGED_FILES" | grep -E "(internal|cmd)/"; then
+                echo "⚠️ Core code changes detected - manual review recommended"
+              fi
+            fi
+          fi
+          
+          # Check for TODO/FIXME comments
+          TODO_COUNT=$(grep -r "TODO\|FIXME" --include="*.go" . | wc -l)
+          if [ "$TODO_COUNT" -gt 0 ]; then
+            echo "⚠️ Found $TODO_COUNT TODO/FIXME comments that should be addressed"
+          fi
+          
+          # Check for function documentation
+          UNDOC_FUNCS=$(grep -r "^func [A-Z]" --include="*.go" . | grep -v "//" | wc -l)
+          if [ "$UNDOC_FUNCS" -gt 0 ]; then
+            echo "⚠️ Found $UNDOC_FUNCS undocumented public functions"
+          fi
+          
+          # Check for hardcoded credentials
+          if grep -r "password\|secret\|key" --include="*.go" . | grep -v "_test.go" | grep -v "//.*password\|//.*secret\|//.*key" > /dev/null; then
+            echo "⚠️ Potential hardcoded credentials found - please review"
+          fi
+          
+          echo "✅ Code review analysis completed"
+
+  # Phase 3: Test Suite
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: [quality-check, code-review]
+    if: needs.quality-check.outputs.quality-passed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: make deps
+
+      # 3. Run Test Cases
+      - name: Run Test Cases
+        id: test-run
+        run: |
+          echo "🧪 Running test suite..."
+          
+          # Run unit tests with coverage
+          echo "Running unit tests with coverage..."
+          if ! go test -v -race -coverprofile=coverage.out ./...; then
+            echo "❌ Tests failed"
+            echo "🔧 Please fix failing tests locally with: go test ./..."
+            exit 1
+          fi
+          
+          # Check coverage
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "📊 Test coverage: ${COVERAGE}%"
+          
+          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
+            echo "⚠️ Test coverage is below 70% (${COVERAGE}%)"
+            echo "💡 Consider adding more tests to improve coverage"
+          else
+            echo "✅ Test coverage is acceptable (${COVERAGE}%)"
+          fi
+          
+          echo "✅ All tests passed"
+
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+        continue-on-error: true
+
+  # Phase 4: Build
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [quality-check, code-review, test]
+    if: needs.quality-check.outputs.quality-passed == 'true'
+    strategy:
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            output: sentinelgo-windows-amd64.exe
+          - goos: linux
+            goarch: amd64
+            output: sentinelgo-linux-amd64
+          - goos: linux
+            goarch: arm64
+            output: sentinelgo-linux-arm64
+          - goos: darwin
+            goarch: amd64
+            output: sentinelgo-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            output: sentinelgo-darwin-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          echo "🏗️ Building for ${{ matrix.goos }}/${{ matrix.goarch }}..."
+          CGO_ENABLED=0 go build -ldflags "-X sentinelgo/cmd/sentinelgo.Version=$VERSION -X sentinelgo/internal/config.Version=$VERSION" -o ${{ matrix.output }} ./cmd/sentinelgo
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: ${{ matrix.output }}
+
+  # Phase 5: Create Release
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [quality-check, code-review, test, build]
+    if: needs.quality-check.outputs.quality-passed == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release packages
+        run: |
+          mkdir -p release
+          cp install.sh INSTALLATION.md install-linux-simple.sh setup-windows-service.bat install-macos-simple.sh release/
+          
+          cd release
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-windows.tar.gz" "../artifacts/sentinelgo-windows-amd64.exe" install.sh INSTALLATION.md setup-windows-service.bat
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz" "../artifacts/sentinelgo-linux-amd64" install.sh INSTALLATION.md install-linux-simple.sh
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz" "../artifacts/sentinelgo-linux-arm64" install.sh INSTALLATION.md install-linux-simple.sh
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz" "../artifacts/sentinelgo-darwin-amd64" install.sh INSTALLATION.md install-macos-simple.sh
+          tar -czf "sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz" "../artifacts/sentinelgo-darwin-arm64" install.sh INSTALLATION.md install-macos-simple.sh
+          
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          # 🚀 SentinelGo ${{ steps.version.outputs.VERSION }}
+          
+          ## ✅ Quality Checks Passed
+          - ✅ Code formatting verified
+          - ✅ Code quality checks passed  
+          - ✅ Code review completed
+          - ✅ Test suite executed
+          - ✅ Cross-platform build successful
+          
+          ## 📋 Changes
+          EOF
+          
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_TAG" ]; then
+            git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD >> release_notes.md
+          else
+            echo "- Initial release" >> release_notes.md
+          fi
+          
+          cat >> release_notes.md << 'EOF'
+          
+          ## 🛠️ Installation
+          1. Download package for your OS/architecture
+          2. Extract archive  
+          3. Run: `sudo ./install.sh`
+          4. Enable auto-updates: `sudo ./sentinelgo -enable-auto-update`
+          EOF
+          
+          NOTES=$(cat release_notes.md | sed 's/"/\\"/g' | tr '\n' '\\n')
+          echo "notes=$NOTES" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: SentinelGo ${{ steps.version.outputs.VERSION }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          files: |
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-windows.tar.gz
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz
+            release/sentinelgo-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Quality Check Failed Notification
+  quality-failed:
+    name: Quality Check Failed
+    runs-on: ubuntu-latest
+    needs: quality-check
+    if: needs.quality-check.outputs.quality-passed != 'true'
+    steps:
+      - name: Quality Check Failed
+        run: |
+          echo "❌ Quality checks failed!"
+          echo ""
+          echo "📋 Error: ${{ needs.quality-check.outputs.error-message }}"
+          echo ""
+          echo "🔧 Please fix the issues locally and push the fixed code."
+          echo "💡 Run 'make pre-release' locally to check before pushing."
+          echo ""
+          echo "⏸️ Workflow stopped - no release will be created."
+          exit 1

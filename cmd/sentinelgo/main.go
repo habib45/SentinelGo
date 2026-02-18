@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ import (
 
 	"sentinelgo/internal/config"
 	"sentinelgo/internal/heartbeat"
+	"sentinelgo/internal/lockfile"
 	"sentinelgo/internal/osinfo"
 	"sentinelgo/internal/updater"
 
@@ -32,17 +34,71 @@ var (
 )
 
 type program struct {
-	cfg *config.Config
+	cfg      *config.Config
+	lockFile *lockfile.LockFile
 }
 
 func (p *program) Start(s service.Service) error {
-	logger.Info("Starting SentinelGo service")
+	if err := logger.Info("Starting SentinelGo service"); err != nil {
+		// Log error but continue - service can still start
+		fmt.Printf("Warning: failed to log start message: %v\n", err)
+	}
+
+	// Acquire process lock to prevent multiple instances
+	version := getCurrentVersion()
+	p.lockFile = lockfile.NewLockFile(fmt.Sprintf("sentinelgo-%s", version))
+
+	// Check for existing lock
+	locked, err := p.lockFile.CheckExistingLock()
+	if err != nil {
+		if err := logger.Errorf("Failed to check existing lock: %v", err); err != nil {
+			fmt.Printf("Warning: failed to log error: %v\n", err)
+		}
+		return err
+	}
+	if locked {
+		errMsg := fmt.Sprintf("Another instance of SentinelGo v%s is already running", version)
+		if err := logger.Error(errMsg); err != nil {
+			fmt.Printf("Warning: failed to log error: %v\n", err)
+		}
+		return errors.New(errMsg)
+	}
+
+	// Try to acquire lock
+	if err := p.lockFile.TryAcquire(); err != nil {
+		errMsg := fmt.Sprintf("Failed to acquire process lock: %v", err)
+		if err := logger.Error(errMsg); err != nil {
+			fmt.Printf("Warning: failed to log error: %v\n", err)
+		}
+		return errors.New(errMsg)
+	}
+
+	if err := logger.Infof("Acquired process lock for SentinelGo v%s", version); err != nil {
+		fmt.Printf("Warning: failed to log info: %v\n", err)
+	}
+
 	go p.run()
 	return nil
 }
 
 func (p *program) Stop(s service.Service) error {
-	logger.Info("Stopping SentinelGo service")
+	if err := logger.Info("Stopping SentinelGo service"); err != nil {
+		fmt.Printf("Warning: failed to log stop message: %v\n", err)
+	}
+
+	// Release process lock
+	if p.lockFile != nil {
+		if err := p.lockFile.Release(); err != nil {
+			if err := logger.Errorf("Failed to release process lock: %v", err); err != nil {
+				fmt.Printf("Warning: failed to log error: %v\n", err)
+			}
+		} else {
+			if err := logger.Info("Released process lock"); err != nil {
+				fmt.Printf("Warning: failed to log info: %v\n", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -50,12 +106,19 @@ func (p *program) run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ticker := time.NewTicker(p.cfg.HeartbeatInterval)
+	// Start auto-updater in background if enabled
+	if p.cfg.AutoUpdate {
+		go updater.AutoUpdateChecker(ctx, p.cfg)
+	}
+
+	ticker := time.NewTicker(p.cfg.GetHeartbeatInterval())
 	defer ticker.Stop()
 
 	// Initial heartbeat
 	if err := heartbeat.Send(ctx, p.cfg, osinfo.Collect()); err != nil {
-		logger.Errorf("Initial heartbeat failed: %v", err)
+		if err := logger.Errorf("Initial heartbeat failed: %v", err); err != nil {
+			fmt.Printf("Warning: failed to log error: %v\n", err)
+		}
 	}
 
 	// Daily update check (once per day)
@@ -64,7 +127,9 @@ func (p *program) run() {
 
 	// Run update check on start (once)
 	if err := updater.CheckAndApply(ctx, p.cfg); err != nil {
-		logger.Errorf("Update check failed: %v", err)
+		if err := logger.Errorf("Update check failed: %v", err); err != nil {
+			fmt.Printf("Warning: failed to log error: %v\n", err)
+		}
 	}
 
 	for {
@@ -73,11 +138,15 @@ func (p *program) run() {
 			return
 		case <-ticker.C:
 			if err := heartbeat.Send(ctx, p.cfg, osinfo.Collect()); err != nil {
-				logger.Errorf("Heartbeat failed: %v", err)
+				if err := logger.Errorf("Heartbeat failed: %v", err); err != nil {
+					fmt.Printf("Warning: failed to log error: %v\n", err)
+				}
 			}
 		case <-updateTicker.C:
 			if err := updater.CheckAndApply(ctx, p.cfg); err != nil {
-				logger.Errorf("Update check failed: %v", err)
+				if err := logger.Errorf("Update check failed: %v", err); err != nil {
+					fmt.Printf("Warning: failed to log error: %v\n", err)
+				}
 			}
 		}
 	}
@@ -407,14 +476,28 @@ func removeLaunchdPlist() error {
 }
 
 func checkLaunchdService() error {
-	cmd := exec.Command("launchctl", "list", "com.sentinelgo.agent")
+	cmd := exec.Command("sh", "-c", "launchctl list | grep sentinelgo")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("Service not found or not running: %s\n", strings.TrimSpace(string(output)))
+		fmt.Printf("Failed to check launchd service: %v\n", err)
 		return nil
 	}
-	fmt.Printf("Launchd service status:\n%s\n", string(output))
+	if len(strings.TrimSpace(string(output))) == 0 {
+		fmt.Println("No SentinelGo services found in launchctl")
+	} else {
+		fmt.Printf("Launchd service status:\n%s\n", string(output))
+	}
 	return nil
+}
+
+// getCurrentVersion returns the current version of the running process
+func getCurrentVersion() string {
+	// Try to get version from config or use build version
+	cfg, err := config.Load("")
+	if err == nil && cfg.CurrentVersion != "" {
+		return cfg.CurrentVersion
+	}
+	return Version
 }
 
 func main() {
@@ -424,6 +507,7 @@ func main() {
 	run := flag.Bool("run", false, "Run in foreground (console mode)")
 	status := flag.Bool("status", false, "Show running SentinelGo processes and versions")
 	stop := flag.Bool("stop", false, "Stop all running SentinelGo processes")
+	enableAutoUpdate := flag.Bool("enable-auto-update", false, "Enable automatic updates")
 	version := flag.Bool("version", false, "Show version information")
 	flag.Parse()
 
@@ -434,7 +518,34 @@ func main() {
 		return
 	}
 
-	cfg, err := config.Load(*cfgPath)
+	// Handle enable-auto-update flag
+	if *enableAutoUpdate {
+		// Enable auto-update in config
+		var cfg *config.Config
+		var err error
+		if len(*cfgPath) == 0 {
+			// Load default config
+			cfg, err = config.Load("")
+		} else {
+			// Load specified config
+			cfg, err = config.Load(*cfgPath)
+		}
+		if err != nil {
+			log.Fatalf("Failed to load config: %v", err)
+		}
+
+		// Enable auto-update
+		cfg.AutoUpdate = true
+		if err := cfg.Save(); err != nil {
+			log.Fatalf("Failed to save config: %v", err)
+		}
+		fmt.Println("Auto-update enabled in config")
+		return
+	}
+
+	var cfg *config.Config
+	var err error
+	cfg, err = config.Load(*cfgPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -519,7 +630,9 @@ func main() {
 			if err := svc.Install(); err != nil {
 				log.Fatalf("Failed to install service: %v", err)
 			}
-			logger.Info("Service installed")
+			if err := logger.Info("Service installed"); err != nil {
+				log.Printf("Warning: failed to log service installation: %v", err)
+			}
 		}
 		return
 	}
@@ -545,13 +658,46 @@ func main() {
 			if err := svc.Uninstall(); err != nil {
 				log.Fatalf("Failed to uninstall service: %v", err)
 			}
-			logger.Info("Service uninstalled")
+			if err := logger.Info("Service uninstalled"); err != nil {
+				log.Fatalf("Failed to log service uninstallation: %v", err)
+			}
 		}
 		return
 	}
 
 	if *run {
 		// Run in console/foreground mode
+		// Acquire process lock to prevent multiple instances
+		version := getCurrentVersion()
+		lockFile := lockfile.NewLockFile(fmt.Sprintf("sentinelgo-%s", version))
+
+		// Check for existing lock
+		locked, err := lockFile.CheckExistingLock()
+		if err != nil {
+			log.Printf("Warning: Failed to check existing lock: %v", err)
+		} else if locked {
+			log.Printf("Another instance of SentinelGo v%s is already running", version)
+			fmt.Printf("Error: Another instance of SentinelGo v%s is already running\n", version)
+			fmt.Println("Use './sentinelgo -stop' to stop the running instance first")
+			return
+		}
+
+		// Try to acquire lock
+		if err := lockFile.TryAcquire(); err != nil {
+			log.Printf("Failed to acquire process lock: %v", err)
+			fmt.Printf("Error: Failed to acquire process lock: %v\n", err)
+			return
+		}
+		defer func() {
+			if err := lockFile.Release(); err != nil {
+				log.Printf("Warning: Failed to release lock: %v", err)
+			}
+		}()
+
+		fmt.Printf("Started SentinelGo v%s in foreground mode\n", version)
+
+		// Set lockFile in program struct for proper cleanup
+		prg.lockFile = lockFile
 		prg.run()
 		return
 	}
@@ -561,6 +707,8 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	if err := svc.Run(); err != nil {
-		logger.Errorf("Service failed: %v", err)
+		if err := logger.Errorf("Service failed: %v", err); err != nil {
+			log.Printf("Warning: failed to log service error: %v", err)
+		}
 	}
 }
