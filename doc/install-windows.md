@@ -46,7 +46,7 @@ The script will automatically:
    - Select "Run as administrator"
 2. Create installation directory:
    ```powershell
-   mkdir 'C:\Program Files\SentinelGo'
+   mkdir 'C:\SentinelGo'
    ```
 
 #### Step 3: Copy SentinelGo to Folder
@@ -56,13 +56,13 @@ The script will automatically:
    ```
 2. Copy the file:
    ```powershell
-    Copy-Item .\sentinelgo-windows-amd64.exe 'C:\Program Files\SentinelGo\sentinelgo.exe'
+    Copy-Item .\sentinelgo-windows-amd64.exe 'C:\SentinelGo\sentinelgo.exe'
    ```
 
 #### Step 4: Configuration Options
 
 ### Option 1: Default Configuration (Recommended)
-By default, SentinelGo will create a config file at `C:\Program Files\SentinelGo\.sentinelgo\config.json` with these settings:
+By default, SentinelGo will create a config file at `C:\SentinelGo\.sentinelgo\config.json` with these settings:
 ```json
 {
   "heartbeat_interval": "5m0s",
@@ -78,8 +78,8 @@ Create a custom config file at your preferred location:
 
 #### Method A: Use Default Location
 ```powershell
-# Config will be created automatically at C:\Program Files\SentinelGo\.sentinelgo\config.json
-C:\Program Files\SentinelGo\sentinelgo.exe -run
+# Config will be created automatically at C:\SentinelGo\.sentinelgo\config.json
+C:\SentinelGo\sentinelgo.exe -run
 ```
 
 #### Method B: Specify Custom Path
@@ -100,7 +100,7 @@ $ConfigContent = @"
 $ConfigContent | Out-File -FilePath "C:\MySentinelGoConfig\config.json" -Encoding UTF8 -Force
 
 # Run with custom config
-C:\Program Files\SentinelGo\sentinelgo.exe -run -config "C:\MySentinelGoConfig\config.json"
+C:\SentinelGo\sentinelgo.exe -run -config "C:\MySentinelGoConfig\config.json"
 ```
 
 #### Method C: System-Wide Config
@@ -125,7 +125,7 @@ $ConfigContent | Out-File -FilePath "C:\sentinelgo\config.json" -Encoding UTF8 -
 ```powershell
 # Set config path via environment variable
 $env:SENTINELGO_CONFIG = "C:\Path\To\Your\config.json"
-C:\Program Files\SentinelGo\sentinelgo.exe -run
+C:\SentinelGo\sentinelgo.exe -run
 ```
 
 ### Option 4: Manual Config Creation
@@ -133,20 +133,20 @@ If you prefer to create config manually:
 
 1. Create config directory:
    ```powershell
-   mkdir "C:\Program Files\SentinelGo\.sentinelgo"
+   mkdir "C:\SentinelGo\.sentinelgo"
    ```
 2. Create config file:
    ```powershell
-   New-Item -Path "C:\Program Files\SentinelGo\.sentinelgo\config.json"
+   New-Item -Path "C:\SentinelGo\.sentinelgo\config.json"
    ```
 3. Edit the file:
    ```powershell
-   notepad "C:\Program Files\SentinelGo\.sentinelgo\config.json"
+   notepad "C:\SentinelGo\.sentinelgo\config.json"
    ```
 4. Copy and paste this content:
    ```json
    {
-     "heartbeat_interval": "5m0s",
+     "heartbeat_interval": 5,
      "github_owner": "habib45",
      "github_repo": "SentinelGo",
      "current_version": "v1.9.9.0",
@@ -155,12 +155,12 @@ If you prefer to create config manually:
    ```
 5. Save the file (Ctrl+S) and close Notepad
 
-**Important:** The `heartbeat_interval` must be a **string** in quotes (e.g., `"5m0s"`) not a number (e.g., `300`).
+**Important:** The `heartbeat_interval` must be a **string** in quotes (e.g., `5`) not a number (e.g., `300`).
 
 #### Step 5: Install as Windows Service
 1. In PowerShell, go to SentinelGo folder:
    ```powershell
-   cd "C:\Program Files\SentinelGo"
+   cd "C:\SentinelGo"
    ```
 2. Install the service:
    ```powershell
@@ -235,7 +235,7 @@ sc.exe delete sentinelgo
 
 ### Using SentinelGo Binary
 ```powershell
-cd "C:\Program Files\SentinelGo"
+cd "C:\SentinelGo"
 
 # Check status
 .\sentinelgo.exe -status
@@ -269,7 +269,7 @@ cd "C:\Program Files\SentinelGo"
 **Easy Fix:**
 1. Test if SentinelGo works manually:
    ```powershell
-   cd "C:\Program Files\SentinelGo"
+   cd "C:\SentinelGo"
    .\sentinelgo.exe -run
    ```
 2. If it works, reinstall service:
@@ -307,7 +307,7 @@ cd "C:\Program Files\SentinelGo"
    - Look for "sentinelgo" errors
 2. Verify config file exists:
    ```powershell
-   Test-Path "C:\Program Files\SentinelGo\.sentinelgo\config.json"
+   Test-Path "C:\SentinelGo\.sentinelgo\config.json"
    ```
 3. Re-run setup script:
    ```powershell
@@ -320,24 +320,24 @@ cd "C:\Program Files\SentinelGo"
 **Easy Fix:**
 1. Verify binary exists:
    ```powershell
-   Test-Path "C:\Program Files\SentinelGo\sentinelgo.exe"
+   Test-Path "C:\SentinelGo\sentinelgo.exe"
    ```
 2. If missing, copy it again:
    ```powershell
-   Copy-Item .\sentinelgo-windows-amd64.exe "C:\Program Files\SentinelGo\sentinelgo.exe"
+   Copy-Item .\sentinelgo-windows-amd64.exe "C:\SentinelGo\sentinelgo.exe"
    ```
 
 ## 🗑️ How to Uninstall SentinelGo
 
 ### Method 1: Using SentinelGo Binary
 ```powershell
-cd "C:\Program Files\SentinelGo"
+cd "C:\SentinelGo"
 
 # Stop and remove service
 .\sentinelgo.exe -uninstall
 
 # Delete folder
-Remove-Item "C:\Program Files\SentinelGo" -Recurse -Force
+Remove-Item "C:\SentinelGo" -Recurse -Force
 ```
 
 ### Method 2: Using PowerShell
@@ -349,7 +349,7 @@ Stop-Service SentinelGo
 Remove-Service SentinelGo
 
 # Delete folder
-Remove-Item "C:\Program Files\SentinelGo" -Recurse -Force
+Remove-Item "C:\SentinelGo" -Recurse -Force
 ```
 
 ### Method 3: Using Command Prompt
@@ -359,7 +359,7 @@ sc.exe stop sentinelgo
 sc.exe delete sentinelgo
 
 # Delete folder
-rmdir /s /q "C:\Program Files\SentinelGo"
+rmdir /s /q "C:\SentinelGo"
 ```
 
 ## 📊 What Information SentinelGo Sends

@@ -8,7 +8,9 @@ REM Configuration
 set SERVICE_NAME=sentinelgo
 set DISPLAY_NAME=SentinelGo Agent
 REM Try multiple possible binary locations
-if exist "C:\Program Files\SentinelGo\sentinelgo.exe" (
+if exist "C:\SentinelGo\sentinelgo.exe" (
+    set BINARY_PATH=C:\SentinelGo\sentinelgo.exe
+) else if exist "C:\Program Files\SentinelGo\sentinelgo.exe" (
     set BINARY_PATH=C:\Program Files\SentinelGo\sentinelgo.exe
 ) else if exist "C:\Program Files (x86)\SentinelGo\sentinelgo.exe" (
     set BINARY_PATH=C:\Program Files (x86)\SentinelGo\sentinelgo.exe
